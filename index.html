@@ -98,11 +98,9 @@
           <i class="fa-solid fa-file-excel"></i> Excel (.xlsx)
         </button>
 
-        <!-- Botão Google Auth -->
+        <!-- Container do Botão Oficial do Google -->
         <div id="authContainer">
-          <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-md flex items-center gap-2">
-            <i class="fa-brands fa-google text-blue-500"></i> Entrar com Google
-          </button>
+          <div id="googleButtonDiv"></div>
         </div>
       </div>
     </div>
@@ -113,7 +111,7 @@
     <div class="max-w-7xl mx-auto w-full flex items-center justify-between">
       <div class="flex items-center gap-2">
         <i id="bannerIcon" class="fa-solid fa-triangle-exclamation text-amber-400"></i>
-        <span id="bannerText">Faça login com sua conta Google para carregar e salvar automaticamente os dados no seu Google Drive.[cite: 1]</span>
+        <span id="bannerText">Faça login com sua conta Google para carregar e salvar automaticamente os dados no seu Google Drive[cite: 1].</span>
       </div>
       <div id="syncIndicator" class="text-[10px] bg-black/30 font-mono font-bold px-2.5 py-0.5 rounded-full border border-white/10">
         Aguardando Login
@@ -459,7 +457,17 @@
           onLoginSuccess();
         },
       });
+
+      // Renderiza o botão oficial do Google na barra superior
+      google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        callback: handleCredentialResponse
+      });
     };
+
+    function handleCredentialResponse(response) {
+      // Callback padrão do renderButton se necessário
+    }
 
     function handleAuthClick() {
       tokenClient.requestAccessToken({ prompt: 'consent' });
@@ -469,11 +477,14 @@
       accessToken = null;
       spreadsheetIdGlobal = null;
       timeRecords = {};
-      document.getElementById('authContainer').innerHTML = `
-        <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-md flex items-center gap-2">
-          <i class="fa-brands fa-google text-blue-500"></i> Entrar com Google
-        </button>
-      `;
+      
+      document.getElementById('authContainer').innerHTML = `<div id="googleButtonDiv"></div>`;
+      // Renderiza novamente o botão de login interativo
+      google.accounts.id.renderButton(
+        document.getElementById("googleButtonDiv"),
+        { theme: "outline", size: "medium", text: "signin_with" }
+      );
+
       document.getElementById('dbFileStatus').className = 'text-[11px] px-2 py-0.5 rounded-md font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5';
       document.getElementById('dbFileStatus').innerHTML = `<i class="fa-solid fa-circle text-[7px] text-rose-400"></i> Desconectado`;
       document.getElementById('mainContent').classList.add('hidden');
@@ -545,7 +556,7 @@
           majorDimension: 'ROWS',
           values: [
             ["CONFIG_TEMA", "CONFIG_ESCALA", "PERIODO_INICIO", "PERIODO_FIM", "", "", "", ""],
-            ["cyber_blue", "8h", document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", "", "", ""]
+            [currentThemeKey, currentShiftType, document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", "", "", ""]
           ]
         })
       });
@@ -557,30 +568,27 @@
       timeRecords = {};
       if (!linhas || linhas.length === 0) return;
 
-      // Linha 1 guarda as configurações salvas (Tema, Escala, Período)
-      const configRow = linhas[0];
-      if (configRow && configRow[0] && COLOR_THEMES[configRow[0]]) {
-        currentThemeKey = configRow[0];
-        applyThemeUI();
-      }
-      if (configRow && configRow[1] && SHIFT_CONFIGS[configRow[1]]) {
-        currentShiftType = configRow[1];
-        applyShiftUI();
-      }
-      if (configRow && configRow[2]) {
-        document.getElementById('filterStart').value = configRow[2];
-      }
-      if (configRow && configRow[3]) {
-        document.getElementById('filterEnd').value = configRow[3];
+      const configRow = linhas[1]; // Linha 2 com as configurações salvas
+      if (configRow) {
+        if (configRow[0] && COLOR_THEMES[configRow[0]]) {
+          currentThemeKey = configRow[0];
+          applyThemeUI();
+        }
+        if (configRow[1] && SHIFT_CONFIGS[configRow[1]]) {
+          currentShiftType = configRow[1];
+          applyShiftUI();
+        }
+        if (configRow[2]) {
+          document.getElementById('filterStart').value = configRow[2];
+        }
+        if (configRow[3]) {
+          document.getElementById('filterEnd').value = configRow[3];
+        }
       }
 
-      // Linhas seguintes guardam os registros (começando da linha 3 em diante, ou linha 2 se ignorarmos cabeçalho)
-      for (let i = 1; i < linhas.length; i++) {
+      for (let i = 2; i < linhas.length; i++) {
         const row = linhas[i];
         if (!row || row.length === 0) continue;
-        // Identificar se a linha é o cabeçalho de dados ou registro
-        if (row[0] === "CONFIG_TEMA" || row[0] === "Data") continue;
-        
         const data = row[0];
         if (!data || !data.includes('-')) continue;
 
@@ -605,6 +613,7 @@
         if (!spreadsheetIdGlobal || !accessToken) return;
         try {
           let rows = [
+            ["CONFIG_TEMA", "CONFIG_ESCALA", "PERIODO_INICIO", "PERIODO_FIM", "", "", "", ""],
             [currentThemeKey, currentShiftType, document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", "", "", ""],
             ["Data", "E1", "S1", "E2", "S2"]
           ];
@@ -643,14 +652,12 @@
         nextType = 'e1';
       } else if (!rec.s1) {
         nextType = 's1';
-      } else if (!rec.e2 && SHIFT_CONFIGS[currentShiftType].targetMinutes > 480) {
-        nextType = 'e2';
       } else if (!rec.e2) {
         nextType = 'e2';
       } else if (!rec.s2) {
         nextType = 's2';
       } else {
-        nextType = 's2'; // Se já tiver tudo preenchido
+        nextType = 's2';
       }
 
       const radio = document.querySelector(`input[name="punchType"][value="${nextType}"]`);
