@@ -3,17 +3,58 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Controle de Ponto - Meu Drive</title>
+  <title>Controle de Ponto - Google Drive Pessoal</title>
+  <!-- Tailwind CSS, FontAwesome, SheetJS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Google Identity Services SDK -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; }
+    body { 
+      font-family: 'Inter', sans-serif; 
+      background-color: var(--app-bg) !important;
+      color: var(--app-text) !important;
+      transition: all 0.3s ease;
+    }
+
+    :root {
+      --primary-color: #2563eb;
+      --primary-hover: #1d4ed8;
+      --header-bg: #0f172a;
+      --header-text: #ffffff;
+      --app-bg: #f1f5f9;
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --app-text: #1e293b;
+      --input-bg: #f8fafc;
+      --table-head-bg: #1e293b;
+      --table-head-text: #ffffff;
+      --theme-gradient: linear-gradient(to right, #2563eb, #4f46e5, #10b981);
+    }
+
+    .theme-card { background-color: var(--card-bg) !important; border-color: var(--card-border) !important; color: var(--app-text) !important; }
+    .theme-header { background-color: var(--header-bg) !important; color: var(--header-text) !important; }
+    .theme-primary-btn { background-color: var(--primary-color) !important; color: #ffffff !important; }
+    .theme-primary-btn:hover { background-color: var(--primary-hover) !important; }
+    .theme-input { background-color: var(--input-bg) !important; border-color: var(--card-border) !important; color: var(--app-text) !important; }
+    .theme-table-head { background-color: var(--table-head-bg) !important; color: var(--table-head-text) !important; }
+    .theme-text { color: var(--primary-color) !important; }
+    .theme-card-bar { background: var(--theme-gradient) !important; }
+
+    .weekend-row { background-color: #334155 !important; color: #cbd5e1 !important; }
+    .weekend-row input { background-color: #475569 !important; color: #f1f5f9 !important; }
+
+    @keyframes pulse-fast {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.97); }
+    }
+    .animate-suggest { animation: pulse-fast 1.5s infinite; }
   </style>
 </head>
-<body class="min-h-screen p-4 sm:p-6">
+<body class="min-h-screen">
 
   <!-- Toast Notification -->
   <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
@@ -23,135 +64,279 @@
     </div>
   </div>
 
-  <div class="max-w-7xl mx-auto space-y-6">
-    
-    <!-- Header com Botão de Login/Logout -->
-    <div class="bg-slate-900 text-white p-5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4">
+  <!-- Header Dinâmico -->
+  <header class="theme-header shadow-lg border-b border-black/20 sticky top-0 z-50 transition-colors duration-300">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <div class="bg-blue-600 p-3 rounded-xl shadow-md">
-          <i class="fa-solid fa-cloud text-xl text-white"></i>
+        <div class="theme-primary-btn p-2.5 rounded-xl shadow-md transition-colors duration-300">
+          <i class="fa-solid fa-cloud text-xl"></i>
         </div>
         <div>
-          <h1 class="text-lg font-bold tracking-tight">Controle de Ponto (Google Drive Pessoal)</h1>
-          <p id="userStatusLogin" class="text-xs text-slate-400 mt-0.5">Faça login com sua conta Google para acessar seus dados</p>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight">Controle de Ponto (Google Drive Pessoal)</h1>
+            <span id="dbFileStatus" class="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5">
+              <i class="fa-solid fa-circle text-[7px] text-rose-400"></i> Desconectado
+            </span>
+          </div>
+          <p id="headerShiftDesc" class="text-xs opacity-80">Jornada 08h às 18h • 2h Almoço • Tolerância ±10min</p>
         </div>
       </div>
-      <div id="authContainer">
-        <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-md flex items-center gap-2">
-          <i class="fa-brands fa-google text-blue-500 text-sm"></i> Entrar com a Conta Google
+
+      <!-- Controles Principais e Login -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center bg-black/20 p-0.5 rounded-lg border border-white/10">
+          <button id="btnUndo" onclick="undoAction()" disabled class="opacity-70 hover:opacity-100 disabled:opacity-30 px-2.5 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1" title="Desfazer (Ctrl + Z)">
+            <i class="fa-solid fa-rotate-left"></i> Desfazer
+          </button>
+          <div class="w-px h-4 bg-white/20"></div>
+          <button id="btnRedo" onclick="redoAction()" disabled class="opacity-70 hover:opacity-100 disabled:opacity-30 px-2.5 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1" title="Refazer (Ctrl + Y)">
+            <i class="fa-solid fa-rotate-right"></i> Refazer
+          </button>
+        </div>
+
+        <button onclick="exportToExcel()" class="bg-black/30 hover:bg-black/40 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm border border-white/10">
+          <i class="fa-solid fa-file-excel"></i> Excel (.xlsx)
         </button>
+
+        <!-- Botão Google Auth -->
+        <div id="authContainer">
+          <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-md flex items-center gap-2">
+            <i class="fa-brands fa-google text-blue-500"></i> Entrar com Google
+          </button>
+        </div>
       </div>
     </div>
+  </header>
 
-    <!-- Conteúdo Principal -->
-    <div id="mainContent" class="grid grid-cols-1 lg:grid-cols-12 gap-6 hidden">
+  <!-- Banner de Status -->
+  <div id="dbBanner" class="bg-black/20 border-b border-black/10 px-4 py-2 text-xs flex items-center justify-between">
+    <div class="max-w-7xl mx-auto w-full flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i id="bannerIcon" class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+        <span id="bannerText">Faça login com sua conta Google para carregar e salvar automaticamente os dados no seu Google Drive.</span>
+      </div>
+      <div id="syncIndicator" class="text-[10px] bg-black/30 font-mono font-bold px-2.5 py-0.5 rounded-full border border-white/10">
+        Aguardando Login
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content (Oculto até autenticar) -->
+  <main id="mainContent" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
       <!-- Painel Esquerdo -->
       <div class="lg:col-span-4 space-y-6">
         
-        <!-- Status e Criação Manual da Planilha -->
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-          <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
-            <i class="fa-solid fa-file-excel text-emerald-600"></i> Banco de Dados no Drive
-          </h2>
-          <button onclick="forcarCriacaoOuConexaoPlanilha()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2">
-            <i class="fa-solid fa-wand-magic-sparkles"></i> Criar/Conectar Planilha no Drive
-          </button>
-          <p id="statusPlanilhaDrive" class="text-[11px] text-slate-500 text-center font-mono">Planilha não vinculada.</p>
-        </div>
-
-        <!-- Registrar Ponto -->
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
-            <i class="fa-solid fa-clock text-blue-600"></i> Registrar Novo Ponto
-          </h2>
-          
-          <div>
-            <label class="block text-[11px] font-bold text-slate-500 mb-1">Data:</label>
-            <input type="date" id="inputDataRegistro" class="w-full border border-slate-300 bg-slate-50 text-xs rounded-xl p-2.5 outline-none font-mono">
+        <!-- Tema -->
+        <div class="theme-card rounded-2xl shadow-sm border p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="font-bold flex items-center gap-2 text-sm">
+              <i class="fa-solid fa-palette theme-text"></i> Tema / Paleta de Cores
+            </h2>
+            <span id="themeBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-md theme-input">Cyber Blue</span>
           </div>
-
-          <div>
-            <label class="block text-[11px] font-bold text-slate-500 mb-1">Hora:</label>
-            <input type="time" id="inputHoraRegistro" class="w-full border border-slate-300 bg-slate-50 text-xs rounded-xl p-2.5 outline-none font-mono">
-          </div>
-
-          <button onclick="salvarNovoRegistro()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-2">
-            <i class="fa-solid fa-plus"></i> Salvar no meu Drive
-          </button>
-        </div>
-
-        <!-- Seletor de Escala -->
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-          <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
-            <i class="fa-solid fa-clock-rotate-left text-blue-600"></i> Carga Horária / Escala
-          </h2>
-          <select id="shiftTypeSelect" onchange="if(window.ultimoResultado) renderizarEspelhoPonto(window.ultimoResultado);" class="w-full border border-slate-300 bg-slate-50 text-xs font-bold rounded-xl p-3 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500">
-            <option value="8h">Jornada 8h (08:00 às 18:00 - Meta: 08:00)</option>
-            <option value="12x36_day">Plantão 12h Diurno (07:00 às 19:00 - Meta: 11:00)</option>
-            <option value="12x36_night">Plantão 12h Noturno (19:00 às 07:00 - Meta: 10:00)</option>
+          <select id="themeSelect" onchange="changeColorTheme(this.value)" class="w-full theme-input border text-xs font-bold rounded-lg focus:ring-2 focus:ring-blue-500 block p-2.5 outline-none cursor-pointer">
+            <option value="cyber_blue">🌐 Cyber Blue</option>
+            <option value="pink_soft">🌸 Pink Soft</option>
+            <option value="terminal_matrix">📟 Terminal Matrix</option>
+            <option value="devops_purple">🟣 DevOps Purple</option>
+            <option value="clean_code">⚡ Clean Code</option>
+            <option value="dracula_dark">👾 Dracula Dark</option>
+            <option value="gitlab_orange">🦊 GitLab Orange</option>
+            <option value="docker_teal">🐬 Docker Teal</option>
+            <option value="security_red">🚨 Red Team Cyber</option>
+            <option value="java_ember">☕ Java Ember</option>
+            <option value="nordic_linux">🌌 Nordic Linux</option>
           </select>
         </div>
 
-        <button onclick="carregarDadosDoDrive()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-rotate"></i> Atualizar Tabela do Drive
-        </button>
+        <!-- Carga Horária -->
+        <div class="theme-card rounded-2xl shadow-sm border p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="font-bold flex items-center gap-2 text-sm">
+              <i class="fa-solid fa-clock-rotate-left theme-text"></i> Carga Horária / Escala
+            </h2>
+            <span id="shiftBadge" class="text-[10px] bg-blue-500/25 theme-text font-bold px-2 py-0.5 rounded-md">8 Horas Padrão</span>
+          </div>
+          <select id="shiftTypeSelect" onchange="changeShiftType(this.value)" class="w-full theme-input border text-xs font-bold rounded-lg focus:ring-2 focus:ring-blue-500 block p-2.5 outline-none cursor-pointer">
+            <option value="8h">Jornada 8h (08:00 às 18:00 - 2h Almoço)</option>
+            <option value="12x36_day">Plantão 12h Diurno (07:00 às 19:00 - 1h Almoço)</option>
+            <option value="12x36_night">Plantão 12h Noturno (19:00 às 07:00 - 2h Intervalo)</option>
+          </select>
+        </div>
+
+        <!-- Registrar Ponto -->
+        <div class="theme-card rounded-2xl shadow-sm border p-5 overflow-hidden relative">
+          <div class="absolute top-0 left-0 right-0 h-1.5 theme-card-bar"></div>
+          
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-bold flex items-center gap-2 text-base">
+              <i class="fa-solid fa-fingerprint theme-text"></i> Registrar Ponto
+            </h2>
+            <span id="liveClock" class="text-xs font-mono font-bold theme-input px-2.5 py-1 rounded-md border">00:00:00</span>
+          </div>
+
+          <form id="punchForm" onsubmit="handleManualPunch(event)" class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold opacity-80 mb-1">Data da Batida</label>
+              <input type="date" id="punchDate" required class="w-full theme-input border text-sm rounded-lg focus:ring-2 focus:ring-blue-500 block p-2.5 outline-none font-medium">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold opacity-80 mb-1.5">Qual batida deseja registrar?</label>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="relative flex items-center justify-center p-2.5 rounded-lg border theme-input cursor-pointer hover:opacity-80 has-[:checked]:border-blue-500 has-[:checked]:ring-2 has-[:checked]:ring-blue-500/30 transition">
+                  <input type="radio" name="punchType" value="e1" checked class="hidden">
+                  <div class="text-center"><span class="block text-xs font-bold">E1</span><span class="block text-[10px] opacity-70">Entrada</span></div>
+                </label>
+                <label class="relative flex items-center justify-center p-2.5 rounded-lg border theme-input cursor-pointer hover:opacity-80 has-[:checked]:border-blue-500 has-[:checked]:ring-2 has-[:checked]:ring-blue-500/30 transition">
+                  <input type="radio" name="punchType" value="s1" class="hidden">
+                  <div class="text-center"><span class="block text-xs font-bold">S1</span><span class="block text-[10px] opacity-70">Saída Almoço</span></div>
+                </label>
+                <label class="relative flex items-center justify-center p-2.5 rounded-lg border theme-input cursor-pointer hover:opacity-80 has-[:checked]:border-blue-500 has-[:checked]:ring-2 has-[:checked]:ring-blue-500/30 transition">
+                  <input type="radio" name="punchType" value="e2" class="hidden">
+                  <div class="text-center"><span class="block text-xs font-bold">E2</span><span class="block text-[10px] opacity-70">Retorno Almoço</span></div>
+                </label>
+                <label class="relative flex items-center justify-center p-2.5 rounded-lg border theme-input cursor-pointer hover:opacity-80 has-[:checked]:border-blue-500 has-[:checked]:ring-2 has-[:checked]:ring-blue-500/30 transition">
+                  <input type="radio" name="punchType" value="s2" class="hidden">
+                  <div class="text-center"><span class="block text-xs font-bold">S2</span><span class="block text-[10px] opacity-70">Saída Fim</span></div>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-semibold opacity-80">Horário (HH:MM)</label>
+                <button type="button" onclick="fillCurrentTime()" class="text-[11px] theme-text hover:underline font-medium flex items-center gap-1">
+                  <i class="fa-regular fa-clock"></i> Usar hora atual
+                </button>
+              </div>
+              <input type="time" id="punchTime" required class="w-full theme-input border text-base font-mono rounded-lg focus:ring-2 focus:ring-blue-500 block p-2.5 outline-none font-bold">
+            </div>
+
+            <button type="submit" class="w-full theme-primary-btn active:scale-[0.99] font-semibold rounded-xl py-3 text-sm shadow-md transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-plus-circle"></i> Inserir Registro
+            </button>
+          </form>
+        </div>
+
+        <!-- Regras da Escala -->
+        <div class="theme-card rounded-2xl shadow-sm border p-5 space-y-3">
+          <h3 class="font-bold text-xs uppercase tracking-wider opacity-75 flex items-center gap-2">
+            <i class="fa-solid fa-sliders"></i> Regras da Escala Ativa
+          </h3>
+          <div class="text-xs space-y-2">
+            <div class="flex items-center justify-between p-2 rounded-lg theme-input border">
+              <span>Carga Efetiva</span><span id="ruleTargetHours" class="font-bold">08:00 / dia</span>
+            </div>
+            <div class="flex items-center justify-between p-2 rounded-lg theme-input border">
+              <span>Horário Previsto</span><span id="ruleShiftRange" class="font-bold">08:00 às 18:00</span>
+            </div>
+            <div class="flex items-center justify-between p-2 rounded-lg theme-input border">
+              <span>Intervalo Padrão</span><span id="ruleLunchDuration" class="font-bold">02:00</span>
+            </div>
+          </div>
+        </div>
 
       </div>
 
       <!-- Painel Direito -->
       <div class="lg:col-span-8 space-y-6">
         
+        <!-- Filtro de Período -->
+        <div class="theme-card rounded-2xl shadow-sm border p-5">
+          <div class="flex flex-wrap items-end justify-between gap-4">
+            <div class="flex flex-wrap items-center gap-3">
+              <div>
+                <label class="block text-xs font-semibold opacity-80 mb-1.5 flex items-center gap-1.5">
+                  <i class="fa-regular fa-calendar-plus theme-text"></i> Período - De
+                </label>
+                <input type="date" id="filterStart" onchange="renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+              </div>
+              <span class="opacity-50 font-bold self-center pt-5">até</span>
+              <div>
+                <label class="block text-xs font-semibold opacity-80 mb-1.5 flex items-center gap-1.5">
+                  <i class="fa-regular fa-calendar-check theme-text"></i> Até
+                </label>
+                <input type="date" id="filterEnd" onchange="renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+              </div>
+            </div>
+
+            <div class="theme-input border rounded-xl px-4 py-2 text-right">
+              <span class="block text-[10px] font-bold uppercase tracking-wider opacity-60">Total do Período</span>
+              <span id="periodSummaryBadge" class="text-xs font-bold">0 dias</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Cards de Resumo -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Saldo HE / Débito</p>
-            <div id="kpiSaldo" class="text-xl font-extrabold mt-1 font-mono text-blue-600">00:00</div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="theme-card p-4 rounded-xl border shadow-sm">
+            <p class="text-[11px] font-semibold opacity-70 uppercase tracking-wider">Saldo HE / Débito</p>
+            <div id="kpiSaldo" class="text-xl font-extrabold mt-1 font-mono">00:00</div>
+            <p id="kpiSaldoSub" class="text-[10px] opacity-60 mt-0.5">Tolerância ±10m</p>
           </div>
-          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Trabalhado</p>
-            <div id="kpiTrabalhado" class="text-xl font-extrabold mt-1 font-mono text-slate-800">00:00</div>
+          <div class="theme-card p-4 rounded-xl border shadow-sm">
+            <p class="text-[11px] font-semibold opacity-70 uppercase tracking-wider">Total Trabalhado</p>
+            <div id="kpiTrabalhado" class="text-xl font-extrabold mt-1 font-mono">00:00</div>
+            <p id="kpiDiasTrabalhados" class="text-[10px] opacity-60 mt-0.5">0 dias</p>
           </div>
-          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm col-span-2 sm:col-span-1">
-            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Dias com Atraso</p>
+          <div class="theme-card p-4 rounded-xl border shadow-sm">
+            <p class="text-[11px] font-semibold opacity-70 uppercase tracking-wider">Dias com Atraso</p>
             <div id="kpiAtrasos" class="text-xl font-extrabold mt-1 text-amber-500 font-mono">0</div>
+            <p id="kpiAtrasosSub" class="text-[10px] text-amber-500/80 mt-0.5">Após 08:00</p>
+          </div>
+          <div class="theme-card p-4 rounded-xl border shadow-sm">
+            <p class="text-[11px] font-semibold opacity-70 uppercase tracking-wider">Status Geral</p>
+            <div id="kpiStatus" class="text-xs font-extrabold mt-2 px-2 py-1 rounded inline-block theme-input border">Sem Dados</div>
           </div>
         </div>
 
         <!-- Tabela -->
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div class="p-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
-            <h3 class="font-bold text-sm text-slate-800"><i class="fa-solid fa-table-cells text-blue-600"></i> Meu Espelho de Ponto</h3>
-            <span id="lblColaborador" class="text-xs text-blue-700 font-bold">Sua Planilha Cloud</span>
+        <div class="theme-card rounded-2xl shadow-sm border overflow-hidden">
+          <div class="p-4 theme-input border-b flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-table-cells opacity-70"></i>
+              <h3 class="font-bold text-sm">Espelho de Ponto</h3>
+            </div>
+            <span id="liveStatusBadge" class="text-xs text-emerald-400 font-semibold">Sincronizado com Google Drive</span>
           </div>
 
-          <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+          <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
             <table class="w-full text-xs text-left border-collapse" id="timesheetTable">
-              <thead class="text-[11px] uppercase bg-slate-900 text-white sticky top-0 z-20">
+              <thead class="text-[11px] uppercase theme-table-head sticky top-0 z-20">
                 <tr>
-                  <th class="py-2.5 px-3 text-center border-r border-slate-700 w-12">DIA</th>
-                  <th class="py-2.5 px-3 text-center border-r border-slate-700 w-24">DATA</th>
-                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">E1</th>
-                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">S1</th>
-                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">E2</th>
-                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">S2</th>
-                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">H. TRAB.</th>
-                  <th class="py-2.5 px-3 text-center border-r border-slate-700 w-24">HE / DÉBITO</th>
-                  <th class="py-2.5 px-2 text-center w-40">STATUS / ALERTAS</th>
+                  <th class="py-2.5 px-3 text-center border-r border-black/20 w-12">DIA</th>
+                  <th class="py-2.5 px-3 text-center border-r border-black/20 w-24">DATA</th>
+                  <th class="py-2.5 px-2 text-center border-r border-black/20 w-28">E1</th>
+                  <th class="py-2.5 px-2 text-center border-r border-black/20 w-28">S1</th>
+                  <th class="py-2.5 px-2 text-center border-r border-black/20 w-28">E2</th>
+                  <th class="py-2.5 px-2 text-center border-r border-black/20 w-28">S2</th>
+                  <th class="py-2.5 px-2 text-center border-r border-black/20 w-20">HORAS TRAB.</th>
+                  <th class="py-2.5 px-3 text-center border-r border-black/20 w-24">HE / DÉBITO</th>
+                  <th class="py-2.5 px-2 text-center w-48">STATUS / ALERTAS</th>
                 </tr>
               </thead>
-              <tbody id="tableBody" class="divide-y divide-slate-200 font-mono">
+              <tbody id="tableBody" class="divide-y divide-black/10 font-mono"></tbody>
+              <tfoot class="sticky bottom-0 theme-table-head font-bold text-xs z-20">
                 <tr>
-                  <td colspan="9" class="py-8 text-center text-slate-400 italic">Sincronize para carregar seus dados.</td>
+                  <td colspan="6" class="py-3 px-4 text-right tracking-wider uppercase">TOTAL DO PERÍODO:</td>
+                  <td id="footTotalTrab" class="py-3 px-2 text-center opacity-90 font-mono">00:00</td>
+                  <td id="footTotalExtra" class="py-3 px-3 text-center text-sm font-mono">00:00</td>
+                  <td></td>
                 </tr>
-              </tbody>
+              </tfoot>
             </table>
           </div>
         </div>
 
       </div>
     </div>
+  </main>
 
+  <div class="fixed bottom-1.5 right-3 text-[10px] opacity-25 hover:opacity-75 transition-opacity pointer-events-none select-none font-mono z-40">
+    Glédson Lopes - Tecnologia da Informação
   </div>
 
   <script>
@@ -162,11 +347,105 @@
     let accessToken = null;
     let spreadsheetIdGlobal = null;
 
+    const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+
+    const COLOR_THEMES = {
+      'cyber_blue': { name: 'Cyber Blue', primary: '#2563eb', primaryHover: '#1d4ed8', headerBg: '#0f172a', headerText: '#ffffff', appBg: '#f1f5f9', cardBg: '#ffffff', cardBorder: '#e2e8f0', appText: '#0f172a', inputBg: '#f8fafc', tableHeadBg: '#0f172a', tableHeadText: '#ffffff', gradient: 'linear-gradient(to right, #2563eb, #4f46e5, #10b981)' },
+      'pink_soft': { name: 'Pink Soft', primary: '#db2777', primaryHover: '#be185d', headerBg: '#831843', headerText: '#ffffff', appBg: '#fff0f5', cardBg: '#ffffff', cardBorder: '#fbcfe8', appText: '#500724', inputBg: '#fdf2f8', tableHeadBg: '#9d174d', tableHeadText: '#fdf2f8', gradient: 'linear-gradient(to right, #db2777, #f472b6, #fb7185)' },
+      'terminal_matrix': { name: 'Terminal Matrix', primary: '#00ff66', primaryHover: '#00cc52', headerBg: '#05140b', headerText: '#00ff66', appBg: '#020b05', cardBg: '#061a0e', cardBorder: '#0b3d1f', appText: '#a7f3d0', inputBg: '#031008', tableHeadBg: '#041f0f', tableHeadText: '#00ff66', gradient: 'linear-gradient(to right, #00ff66, #10b981, #047857)' },
+      'devops_purple': { name: 'DevOps Purple', primary: '#a855f7', primaryHover: '#9333ea', headerBg: '#1e0836', headerText: '#ffffff', appBg: '#130424', cardBg: '#21093b', cardBorder: '#4c1d95', appText: '#f3e8ff', inputBg: '#19062e', tableHeadBg: '#2e1065', tableHeadText: '#ffffff', gradient: 'linear-gradient(to right, #a855f7, #ec4899, #f43f5e)' },
+      'clean_code': { name: 'Clean Code', primary: '#64748b', primaryHover: '#475569', headerBg: '#020617', headerText: '#ffffff', appBg: '#0f172a', cardBg: '#1e293b', cardBorder: '#334155', appText: '#f8fafc', inputBg: '#0f172a', tableHeadBg: '#020617', tableHeadText: '#ffffff', gradient: 'linear-gradient(to right, #64748b, #94a3b8, #cbd5e1)' },
+      'dracula_dark': { name: 'Dracula Dark', primary: '#bd93f9', primaryHover: '#a77bf3', headerBg: '#191a21', headerText: '#f8f8f2', appBg: '#21222c', cardBg: '#282a36', cardBorder: '#44475a', appText: '#f8f8f2', inputBg: '#1e1f29', tableHeadBg: '#191a21', tableHeadText: '#50fa7b', gradient: 'linear-gradient(to right, #bd93f9, #ff79c6, #50fa7b)' },
+      'gitlab_orange': { name: 'GitLab Orange', primary: '#f97316', primaryHover: '#ea580c', headerBg: '#2e0f06', headerText: '#ffffff', appBg: '#1c0803', cardBg: '#381206', cardBorder: '#7c2d12', appText: '#ffedd5', inputBg: '#270c04', tableHeadBg: '#431407', tableHeadText: '#fed7aa', gradient: 'linear-gradient(to right, #ea580c, #f97316, #fbbf24)' },
+      'docker_teal': { name: 'Docker Teal', primary: '#06b6d4', primaryHover: '#0891b2', headerBg: '#082f49', headerText: '#ffffff', appBg: '#031726', cardBg: '#0c3b5e', cardBorder: '#155e75', appText: '#e0f2fe', inputBg: '#072840', tableHeadBg: '#082f49', tableHeadText: '#38bdf8', gradient: 'linear-gradient(to right, #0891b2, #06b6d4, #38bdf8)' },
+      'security_red': { name: 'Red Team Cyber', primary: '#f43f5e', primaryHover: '#e11d48', headerBg: '#33050f', headerText: '#ffffff', appBg: '#1f0208', cardBg: '#3b0611', cardBorder: '#881337', appText: '#ffe4e6', inputBg: '#26030a', tableHeadBg: '#4c0519', tableHeadText: '#fca5a5', gradient: 'linear-gradient(to right, #e11d48, #f43f5e, #fb7185)' },
+      'java_ember': { name: 'Java Ember', primary: '#f59e0b', primaryHover: '#d97706', headerBg: '#291804', headerText: '#ffffff', appBg: '#1a0e02', cardBg: '#361e05', cardBorder: '#78350f', appText: '#fef3c7', inputBg: '#241403', tableHeadBg: '#451a03', tableHeadText: '#fcd34d', gradient: 'linear-gradient(to right, #d97706, #f59e0b, #fbbf24)' },
+      'nordic_linux': { name: 'Nordic Linux', primary: '#88c0d0', primaryHover: '#81a1c1', headerBg: '#242933', headerText: '#eceff4', appBg: '#2e3440', cardBg: '#3b4252', cardBorder: '#4c566a', appText: '#eceff4', inputBg: '#2e3440', tableHeadBg: '#242933', tableHeadText: '#88c0d0', gradient: 'linear-gradient(to right, #5e81ac, #81a1c1, #88c0d0)' }
+    };
+
+    const SHIFT_CONFIGS = {
+      '8h': { name: '8 Horas Padrão', desc: 'Jornada 08h às 18h • 2h Almoço • Tolerância ±10min', startHour: 8, startMin: 0, rangeText: '08:00 às 18:00', lunchDuration: '02:00', targetMinutes: 480, targetText: '08:00 / dia', isNight: false, allowsHalfDay: true, lateThreshold: 480 },
+      '12x36_day': { name: 'Plantão 12h Diurno', desc: 'Plantão 07h às 19h • 1h Almoço • Tolerância ±10min', startHour: 7, startMin: 0, rangeText: '07:00 às 19:00', lunchDuration: '01:00', targetMinutes: 660, targetText: '11:00 / plantão', isNight: false, allowsHalfDay: false, lateThreshold: 420 },
+      '12x36_night': { name: 'Plantão 12h Noturno', desc: 'Plantão 19h às 07h • 2h Intervalo • Tolerância ±10min', startHour: 19, startMin: 0, rangeText: '19:00 às 07:00', lunchDuration: '02:00', targetMinutes: 600, targetText: '10:00 / plantão', isNight: true, allowsHalfDay: false, lateThreshold: 1140 }
+    };
+
+    let timeRecords = {};
+    let currentShiftType = '8h';
+    let currentThemeKey = 'cyber_blue';
+    let autoSaveTimer = null;
+
+    const undoStack = [];
+    const redoStack = [];
+    const MAX_HISTORY = 40;
+
+    function pushHistoryState() {
+      undoStack.push(JSON.stringify({ records: timeRecords, shift: currentShiftType, theme: currentThemeKey, filterStart: document.getElementById('filterStart').value, filterEnd: document.getElementById('filterEnd').value }));
+      if (undoStack.length > MAX_HISTORY) undoStack.shift();
+      redoStack.length = 0;
+      updateUndoRedoButtons();
+    }
+
+    function updateUndoRedoButtons() {
+      document.getElementById('btnUndo').disabled = undoStack.length === 0;
+      document.getElementById('btnRedo').disabled = redoStack.length === 0;
+    }
+
+    function undoAction() {
+      if (undoStack.length === 0) return;
+      redoStack.push(JSON.stringify({ records: timeRecords, shift: currentShiftType, theme: currentThemeKey, filterStart: document.getElementById('filterStart').value, filterEnd: document.getElementById('filterEnd').value }));
+      const prevState = JSON.parse(undoStack.pop());
+      timeRecords = prevState.records;
+      currentShiftType = prevState.shift || '8h';
+      currentThemeKey = prevState.theme || 'cyber_blue';
+      if (prevState.filterStart) document.getElementById('filterStart').value = prevState.filterStart;
+      if (prevState.filterEnd) document.getElementById('filterEnd').value = prevState.filterEnd;
+      applyThemeUI();
+      applyShiftUI();
+      updateUndoRedoButtons();
+      autoSaveToDrive();
+      renderTable();
+      showToast("Ação desfeita!");
+    }
+
+    function redoAction() {
+      if (redoStack.length === 0) return;
+      undoStack.push(JSON.stringify({ records: timeRecords, shift: currentShiftType, theme: currentThemeKey, filterStart: document.getElementById('filterStart').value, filterEnd: document.getElementById('filterEnd').value }));
+      const nextState = JSON.parse(redoStack.pop());
+      timeRecords = nextState.records;
+      currentShiftType = nextState.shift || '8h';
+      currentThemeKey = nextState.theme || 'cyber_blue';
+      if (nextState.filterStart) document.getElementById('filterStart').value = nextState.filterStart;
+      if (nextState.filterEnd) document.getElementById('filterEnd').value = nextState.filterEnd;
+      applyThemeUI();
+      applyShiftUI();
+      updateUndoRedoButtons();
+      autoSaveToDrive();
+      renderTable();
+      showToast("Ação refeita!");
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault(); undoAction();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        e.preventDefault(); redoAction();
+      }
+    });
+
     window.onload = function () {
-      const hoje = new Date().toISOString().split('T')[0];
-      const horaAtual = new Date().toTimeString().substring(0, 5);
-      document.getElementById('inputDataRegistro').value = hoje;
-      document.getElementById('inputHoraRegistro').value = horaAtual;
+      const today = new Date();
+      document.getElementById('punchDate').value = formatDateISO(today);
+      fillCurrentTime();
+
+      let year = today.getFullYear();
+      let month = today.getMonth();
+      if (today.getDate() < 20) month -= 1;
+
+      document.getElementById('filterStart').value = formatDateISO(new Date(year, month, 20));
+      document.getElementById('filterEnd').value = formatDateISO(new Date(year, month + 1, 19));
+
+      applyThemeUI();
+      applyShiftUI();
 
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
@@ -189,48 +468,34 @@
     function signOut() {
       accessToken = null;
       spreadsheetIdGlobal = null;
-      window.ultimoResultado = null;
-
+      timeRecords = {};
       document.getElementById('authContainer').innerHTML = `
-        <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-md flex items-center gap-2">
-          <i class="fa-brands fa-google text-blue-500 text-sm"></i> Entrar com a Conta Google
+        <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-md flex items-center gap-2">
+          <i class="fa-brands fa-google text-blue-500"></i> Entrar com Google
         </button>
       `;
-      document.getElementById('userStatusLogin').textContent = "Faça login com sua conta Google para acessar seus dados";
+      document.getElementById('dbFileStatus').className = 'text-[11px] px-2 py-0.5 rounded-md font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5';
+      document.getElementById('dbFileStatus').innerHTML = `<i class="fa-solid fa-circle text-[7px] text-rose-400"></i> Desconectado`;
       document.getElementById('mainContent').classList.add('hidden');
-      showToast("Você saiu da conta com sucesso.");
+      showToast("Você saiu da conta.");
     }
 
     async function onLoginSuccess() {
       showToast("Login realizado com sucesso!");
       document.getElementById('authContainer').innerHTML = `
-        <div class="flex items-center gap-2">
-          <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2">
-            <i class="fa-solid fa-circle text-[8px]"></i> Google Drive Conectado
-          </span>
-          <button onclick="signOut()" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5" title="Sair da conta">
-            <i class="fa-solid fa-right-from-bracket"></i> Sair
-          </button>
-        </div>
+        <button onclick="signOut()" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2">
+          <i class="fa-solid fa-right-from-bracket"></i> Sair
+        </button>
       `;
-      document.getElementById('userStatusLogin').textContent = "Conectado via Conta Google pessoal";
+      document.getElementById('dbFileStatus').className = 'text-[11px] px-2.5 py-0.5 rounded-md font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5';
+      document.getElementById('dbFileStatus').innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> Google Drive Conectado`;
       document.getElementById('mainContent').classList.remove('hidden');
-      
-      await carregarDadosDoDrive();
+
+      await sincronizarAutomaticoDrive();
     }
 
-    function showToast(msg, isError = false) {
-      const toast = document.getElementById('toastNotification');
-      const icon = document.getElementById('toastIcon');
-      const msgEl = document.getElementById('toastMsg');
-      msgEl.textContent = msg;
-      icon.className = isError ? 'fa-solid fa-triangle-exclamation text-rose-400 text-lg' : 'fa-solid fa-circle-check text-emerald-400 text-lg';
-      toast.classList.remove('translate-y-20', 'opacity-0');
-      setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
-    }
-
-    async function forcarCriacaoOuConexaoPlanilha() {
-      showToast("Verificando planilha no Drive...");
+    async function sincronizarAutomaticoDrive() {
+      showToast("Sincronizando com o Google Drive...");
       try {
         const query = encodeURIComponent("name = 'BancoDePonto_MeuDrive' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
         const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
@@ -240,149 +505,172 @@
 
         if (data.files && data.files.length > 0) {
           spreadsheetIdGlobal = data.files[0].id;
-          showToast("Planilha já existente conectada com sucesso!");
         } else {
           spreadsheetIdGlobal = await criarPlanilhaNoDrive();
-          showToast("Nova planilha criada no seu Drive!");
         }
 
-        document.getElementById('statusPlanilhaDrive').textContent = `ID Vinculado: ${spreadsheetIdGlobal.substring(0, 10)}...`;
-        carregarDadosDoDrive();
-      } catch (err) {
-        console.error(err);
-        showToast("Erro ao criar/conectar planilha.", true);
-      }
-    }
-
-    async function carregarDadosDoDrive() {
-      try {
-        if (!spreadsheetIdGlobal) {
-          await forcarCriacaoOuConexaoPlanilha();
-          return;
-        }
-
-        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:C100`, {
+        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:E200`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
         const sheetData = await sheetRes.json();
         
         processarDadosPlanilha(sheetData.values || []);
+        showToast("Sincronizado com sucesso!");
       } catch (err) {
         console.error(err);
-        showToast("Erro ao carregar dados da planilha.", true);
+        showToast("Erro ao sincronizar com o Drive.", true);
       }
     }
 
     async function criarPlanilhaNoDrive() {
       const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          properties: { title: 'BancoDePonto_MeuDrive' }
-        })
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: { title: 'BancoDePonto_MeuDrive' } })
       });
       const sheet = await res.json();
       const spreadsheetId = sheet.spreadsheetId;
 
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          requests: [
-            { addSheet: { properties: { title: 'APONTAMENTOS' } } }
-          ]
-        })
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'APONTAMENTOS' } } }] })
       });
 
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:C1?valueInputOption=RAW`, {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:E1?valueInputOption=RAW`, {
         method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          range: 'APONTAMENTOS!A1:C1',
-          majorDimension: 'ROWS',
-          values: [["Data", "Hora", "Tipo"]]
-        })
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ range: 'APONTAMENTOS!A1:E1', majorDimension: 'ROWS', values: [["Data", "E1", "S1", "E2", "S2"]] })
       });
 
       return spreadsheetId;
     }
 
-    async function salvarNovoRegistro() {
-      if (!spreadsheetIdGlobal) {
-        await forcarCriacaoOuConexaoPlanilha();
-        if (!spreadsheetIdGlobal) {
-          showToast("Erro: Planilha não conectada", true);
-          return;
-        }
-      }
-
-      const data = document.getElementById('inputDataRegistro').value;
-      const hora = document.getElementById('inputHoraRegistro').value;
-
-      if (!data || !hora) {
-        showToast("Preencha a data e a hora!", true);
-        return;
-      }
-
-      showToast("Salvando registro na nuvem...");
-
-      try {
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A:C:append?valueInputOption=USER_ENTERED`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            range: 'APONTAMENTOS!A:C',
-            majorDimension: 'ROWS',
-            values: [[data, hora, "Registro Web"]]
-          })
-        });
-
-        showToast("Ponto registrado com sucesso!");
-        carregarDadosDoDrive();
-      } catch (err) {
-        console.error(err);
-        showToast("Erro ao salvar registro.", true);
-      }
-    }
-
     function processarDadosPlanilha(linhas) {
-      const tbody = document.getElementById('tableBody');
-      tbody.innerHTML = '';
+      timeRecords = {};
+      if (!linhas || linhas.length <= 1) return;
 
-      if (!linhas || linhas.length <= 1) {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 italic">Nenhum registro encontrado. Insira o primeiro ponto ao lado.</td></tr>`;
-        return;
-      }
-
-      let apontamentos = [];
       for (let i = 1; i < linhas.length; i++) {
-        if (linhas[i][0] && linhas[i][1]) {
-          apontamentos.push({ data: linhas[i][0], hora: linhas[i][1] });
-        }
+        const row = linhas[i];
+        const data = row[0];
+        if (!data) continue;
+        timeRecords[data] = {
+          e1: row[1] || '',
+          s1: row[2] || '',
+          e2: row[3] || '',
+          s2: row[4] || '',
+          comments: {}
+        };
       }
-
-      window.ultimoResultado = { apontamentos };
-      renderizarEspelhoPonto(window.ultimoResultado);
+      renderTable();
     }
 
-    const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
-    const SHIFT_CONFIGS = {
-      '8h': { name: '8 Horas Padrão', targetMinutes: 480, lateThreshold: 480 },
-      '12x36_day': { name: 'Plantão 12h Diurno', targetMinutes: 660, lateThreshold: 420 },
-      '12x36_night': { name: 'Plantão 12h Noturno', targetMinutes: 600, lateThreshold: 1140 }
-    };
+    function autoSaveToDrive() {
+      const syncIndicator = document.getElementById('syncIndicator');
+      if (syncIndicator) syncIndicator.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Salvando...`;
+
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(async () => {
+        if (!spreadsheetIdGlobal || !accessToken) return;
+        try {
+          let rows = [["Data", "E1", "S1", "E2", "S2"]];
+          Object.keys(timeRecords).sort().forEach(date => {
+            const r = timeRecords[date];
+            rows.push([date, r.e1 || '', r.s1 || '', r.e2 || '', r.s2 || '']);
+          });
+
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:E500?valueInputOption=USER_ENTERED`, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ range: 'APONTAMENTOS!A1:E500', majorDimension: 'ROWS', values: rows })
+          });
+
+          if (syncIndicator) {
+            syncIndicator.className = 'text-[10px] bg-emerald-600 text-white font-mono font-bold px-2.5 py-0.5 rounded-full';
+            syncIndicator.textContent = 'Salvo no Google Drive';
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }, 500);
+    }
+
+    function changeColorTheme(newTheme) {
+      if (!COLOR_THEMES[newTheme]) return;
+      pushHistoryState();
+      currentThemeKey = newTheme;
+      applyThemeUI();
+      showToast(`Tema alterado para: ${COLOR_THEMES[newTheme].name}`);
+    }
+
+    function applyThemeUI() {
+      const theme = COLOR_THEMES[currentThemeKey] || COLOR_THEMES['cyber_blue'];
+      document.documentElement.style.setProperty('--primary-color', theme.primary);
+      document.documentElement.style.setProperty('--primary-hover', theme.primaryHover);
+      document.documentElement.style.setProperty('--header-bg', theme.headerBg);
+      document.documentElement.style.setProperty('--header-text', theme.headerText);
+      document.documentElement.style.setProperty('--app-bg', theme.appBg);
+      document.documentElement.style.setProperty('--card-bg', theme.cardBg);
+      document.documentElement.style.setProperty('--card-border', theme.cardBorder);
+      document.documentElement.style.setProperty('--app-text', theme.appText);
+      document.documentElement.style.setProperty('--input-bg', theme.inputBg);
+      document.documentElement.style.setProperty('--table-head-bg', theme.tableHeadBg);
+      document.documentElement.style.setProperty('--table-head-text', theme.tableHeadText);
+      document.documentElement.style.setProperty('--theme-gradient', theme.gradient);
+
+      document.getElementById('themeSelect').value = currentThemeKey;
+      document.getElementById('themeBadge').textContent = theme.name;
+    }
+
+    function changeShiftType(newShift) {
+      if (!SHIFT_CONFIGS[newShift]) return;
+      pushHistoryState();
+      currentShiftType = newShift;
+      applyShiftUI();
+      renderTable();
+      showToast(`Escala alterada para: ${SHIFT_CONFIGS[newShift].name}`);
+    }
+
+    function applyShiftUI() {
+      const conf = SHIFT_CONFIGS[currentShiftType] || SHIFT_CONFIGS['8h'];
+      document.getElementById('shiftTypeSelect').value = currentShiftType;
+      document.getElementById('shiftBadge').textContent = conf.name;
+      document.getElementById('headerShiftDesc').textContent = conf.desc;
+      document.getElementById('ruleTargetHours').textContent = conf.targetText;
+      document.getElementById('ruleShiftRange').textContent = conf.rangeText;
+      document.getElementById('ruleLunchDuration').textContent = conf.lunchDuration;
+      document.getElementById('kpiAtrasosSub').textContent = `Após ${String(conf.startHour).padStart(2, '0')}:${String(conf.startMin).padStart(2, '0')}`;
+    }
+
+    function showToast(msg, isError = false) {
+      const toast = document.getElementById('toastNotification');
+      const icon = document.getElementById('toastIcon');
+      const msgEl = document.getElementById('toastMsg');
+      msgEl.textContent = msg;
+      icon.className = isError ? 'fa-solid fa-triangle-exclamation text-rose-400 text-lg' : 'fa-solid fa-circle-check text-emerald-400 text-lg';
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2500);
+    }
+
+    function fillCurrentTime() {
+      const now = new Date();
+      document.getElementById('punchTime').value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function updateClock() {
+      document.getElementById('liveClock').textContent = new Date().toLocaleTimeString('pt-BR');
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function formatDateISO(d) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function parseISODate(s) {
+      const [y, m, d] = s.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
 
     function timeToMinutes(tStr) {
       if (!tStr || !tStr.includes(':')) return null;
@@ -402,75 +690,260 @@
       return `${sign}${String(Math.floor(absMin / 60)).padStart(2, '0')}:${String(absMin % 60).padStart(2, '0')}`;
     }
 
-    function renderizarEspelhoPonto(resultado) {
-      const shiftKey = document.getElementById('shiftTypeSelect').value;
-      const shift = SHIFT_CONFIGS[shiftKey];
+    function promptComment(isoDate, field) {
+      if (!timeRecords[isoDate]) timeRecords[isoDate] = { e1: '', s1: '', e2: '', s2: '', comments: {} };
+      if (!timeRecords[isoDate].comments) timeRecords[isoDate].comments = {};
+
+      const currentComment = timeRecords[isoDate].comments[field] || '';
+      const newComment = prompt(`Comentário para ${field.toUpperCase()} (${isoDate}):`, currentComment);
+
+      if (newComment !== null) {
+        pushHistoryState();
+        if (newComment.trim() === '') delete timeRecords[isoDate].comments[field];
+        else timeRecords[isoDate].comments[field] = newComment.trim();
+        autoSaveToDrive();
+        renderTable();
+        showToast("Comentário salvo!");
+      }
+    }
+
+    function clearRecordField(isoDate, field) {
+      if (!timeRecords[isoDate] || !timeRecords[isoDate][field]) return;
+      if (confirm(`Deseja realmente apagar o registro ${field.toUpperCase()} do dia ${isoDate}?`)) {
+        pushHistoryState();
+        timeRecords[isoDate][field] = '';
+        if (timeRecords[isoDate].comments) delete timeRecords[isoDate].comments[field];
+        autoSaveToDrive();
+        renderTable();
+        showToast(`Registro ${field.toUpperCase()} excluído.`);
+      }
+    }
+
+    function editRecordField(isoDate, field) {
+      const currentVal = timeRecords[isoDate]?.[field] || '';
+      const newVal = prompt(`Editar horário de ${field.toUpperCase()} (${isoDate}):`, currentVal);
+      if (newVal !== null) {
+        pushHistoryState();
+        if (!timeRecords[isoDate]) timeRecords[isoDate] = { e1: '', s1: '', e2: '', s2: '', comments: {} };
+        timeRecords[isoDate][field] = newVal.trim();
+        autoSaveToDrive();
+        renderTable();
+        showToast("Registro atualizado!");
+      }
+    }
+
+    function calculateDay(rec, isWeekend) {
+      const shift = SHIFT_CONFIGS[currentShiftType] || SHIFT_CONFIGS['8h'];
+      const punches = [rec?.e1, rec?.s1, rec?.e2, rec?.s2].filter(p => p && p.trim() !== '');
+      const punchCount = punches.length;
+
+      if (punchCount === 0) return { workedMin: null, extraMin: 0, isLate: false, missingS2: false, suggestedS2: null, hasValidPairs: false, isHalfDay: false, underTargetHours: false };
+
+      const e1 = timeToMinutes(rec?.e1);
+      const s1 = timeToMinutes(rec?.s1);
+      const e2 = timeToMinutes(rec?.e2);
+      const s2 = timeToMinutes(rec?.s2);
+
+      const period1 = (e1 !== null && s1 !== null) ? getMinutesDiff(e1, s1) : null;
+      const period2 = (e2 !== null && s2 !== null) ? getMinutesDiff(e2, s2) : null;
+
+      const hasMorningPair = (period1 !== null && period1 > 0);
+      const hasAfternoonPair = (period2 !== null && period2 > 0);
+      const missingS2 = (hasMorningPair && e2 !== null && s2 === null);
+      let suggestedS2 = null;
+
+      if (missingS2) {
+        const neededMin = shift.targetMinutes - period1;
+        if (neededMin > 0) {
+          let calcMin = e2 + neededMin;
+          if (calcMin >= 1440) calcMin -= 1440;
+          suggestedS2 = calcMin;
+        }
+      }
+
+      let workedMin = null;
+      let hasValidPairs = false;
+      let isHalfDay = false;
+
+      if (hasMorningPair && hasAfternoonPair) {
+        workedMin = period1 + period2;
+        hasValidPairs = true;
+      } else if (shift.allowsHalfDay) {
+        if (hasMorningPair && !e2 && !s2) { workedMin = period1; hasValidPairs = true; isHalfDay = true; }
+        else if (hasAfternoonPair && !e1 && !s1) { workedMin = period2; hasValidPairs = true; isHalfDay = true; }
+      }
+
+      const hasOddPunches = (punchCount % 2 !== 0);
+      const standardWorkMin = (isWeekend && currentShiftType === '8h') ? 0 : shift.targetMinutes;
+      let rawDiff = null;
+      let extraMin = 0;
+
+      if (workedMin !== null) {
+        rawDiff = workedMin - standardWorkMin;
+        extraMin = (isWeekend && currentShiftType === '8h') ? workedMin : (Math.abs(rawDiff) > 10 ? rawDiff : 0);
+      }
+
+      let isLate = e1 !== null && e1 > shift.lateThreshold;
+      let underTargetHours = (!isWeekend || currentShiftType !== '8h') && workedMin !== null && workedMin < shift.targetMinutes;
+
+      return { workedMin, extraMin, isLate, missingS2, suggestedS2, hasValidPairs, isHalfDay, underTargetHours, hasOddPunches };
+    }
+
+    function renderTable() {
+      const startStr = document.getElementById('filterStart').value;
+      const endStr = document.getElementById('filterEnd').value;
+      if (!startStr || !endStr) return;
+
+      const startDate = parseISODate(startStr);
+      const endDate = parseISODate(endStr);
+      if (startDate > endDate) return;
+
       const tbody = document.getElementById('tableBody');
       tbody.innerHTML = '';
 
-      const apontamentos = resultado.apontamentos || [];
-      let diasAgrupados = {};
-      apontamentos.forEach(ap => {
-        let dataPart = ap.data || "";
-        let horaPart = ap.hora ? ap.hora.substring(0, 5) : "00:00";
-        if (!dataPart) return;
-        if (!diasAgrupados[dataPart]) diasAgrupados[dataPart] = [];
-        diasAgrupados[dataPart].push(horaPart);
-      });
-
-      let datasOrdenadas = Object.keys(diasAgrupados).sort();
       let totalWorkedMinutes = 0;
       let totalExtraMinutes = 0;
       let lateCount = 0;
+      let daysWithWorkCount = 0;
+      let totalDaysCount = 0;
 
-      datasOrdenadas.forEach(data => {
-        let batidas = [...new Set(diasAgrupados[data])].sort();
-        let e1 = batidas[0] || null;
-        let s1 = batidas[1] || null;
-        let e2 = batidas[2] || null;
-        let s2 = batidas[3] || null;
+      let curr = new Date(startDate);
+      while (curr <= endDate) {
+        totalDaysCount++;
+        const isoKey = formatDateISO(curr);
+        const dayOfWeekIdx = curr.getDay();
+        const isWeekend = (dayOfWeekIdx === 0 || dayOfWeekIdx === 6);
+        const formattedDateBR = `${String(curr.getDate()).padStart(2, '0')}/${String(curr.getMonth() + 1).padStart(2, '0')}/${curr.getFullYear()}`;
 
-        let e1Min = timeToMinutes(e1);
-        let s1Min = timeToMinutes(s1);
-        let e2Min = timeToMinutes(e2);
-        let s2Min = timeToMinutes(s2);
+        const rec = timeRecords[isoKey] || { e1: '', s1: '', e2: '', s2: '', comments: {} };
+        const comments = rec.comments || {};
+        const calc = calculateDay(rec, isWeekend);
 
-        let p1 = (e1Min !== null && s1Min !== null) ? getMinutesDiff(e1Min, s1Min) : 0;
-        let p2 = (e2Min !== null && s2Min !== null) ? getMinutesDiff(e2Min, s2Min) : 0;
-        let workedMin = p1 + p2;
+        if (calc.workedMin !== null) { totalWorkedMinutes += calc.workedMin; daysWithWorkCount++; }
+        totalExtraMinutes += calc.extraMin;
+        if (calc.isLate) lateCount++;
 
-        if (workedMin === 0 && e1Min !== null && s2Min !== null && e2Min === null) {
-          workedMin = getMinutesDiff(e1Min, s2Min);
+        const tr = document.createElement('tr');
+        tr.className = (isWeekend && currentShiftType === '8h') ? 'weekend-row hover:opacity-90 transition' : 'hover:bg-black/5 dark:hover:bg-white/5 transition';
+
+        let heClass = 'opacity-60 font-medium';
+        let heText = '-';
+        if (calc.hasValidPairs || calc.extraMin !== 0) {
+          if (calc.extraMin > 0) { heClass = 'text-emerald-400 font-bold bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30'; heText = `+${minutesToTimeString(calc.extraMin)}`; }
+          else if (calc.extraMin < 0) { heClass = 'text-rose-400 font-bold bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/30'; heText = minutesToTimeString(calc.extraMin); }
+          else { heText = '00:00'; }
         }
 
-        let diffMin = workedMin > 0 ? workedMin - shift.targetMinutes : -shift.targetMinutes;
-        let extraMin = Math.abs(diffMin) > 10 ? diffMin : 0;
+        let alertsHtml = '';
+        if (calc.missingS2 && calc.suggestedS2 !== null) {
+          alertsHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-amber-500 text-slate-950 font-bold shadow-sm animate-suggest">Saída recomendada: <strong>${minutesToTimeString(calc.suggestedS2)}</strong></span> `;
+        } else if (calc.hasOddPunches) {
+          alertsHtml += `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-300 font-semibold">Falta Registro</span> `;
+        }
+        if (calc.isHalfDay) alertsHtml += `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 font-semibold">Meio Período</span> `;
+        if (calc.isLate) alertsHtml += `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-medium">Atraso</span> `;
 
-        if (workedMin > 0) totalWorkedMinutes += workedMin;
-        totalExtraMinutes += extraMin;
+        const fields = ['e1', 's1', 'e2', 's2'];
+        const cellsHtml = fields.map(f => {
+          const val = rec[f] || '';
+          const cText = comments[f] || '';
+          const hasVal = Boolean(val);
 
-        let isLate = e1Min !== null && e1Min > shift.lateThreshold;
-        if (isLate) lateCount++;
+          return `
+            <td class="py-1 px-1 border-r border-black/10 relative group">
+              <div class="flex items-center justify-between gap-1">
+                <input type="text" value="${val || '--:--'}" readonly class="w-full text-center bg-transparent border-0 rounded py-1 font-mono text-xs cursor-pointer select-none ${!hasVal ? 'opacity-30' : 'font-semibold'}" onclick="editRecordField('${isoKey}', '${f}')" title="Clique para editar">
+                
+                <div class="flex items-center gap-1 pr-1">
+                  <button type="button" onclick="promptComment('${isoKey}', '${f}')" class="text-[10px] opacity-40 hover:opacity-100" title="${cText || 'Comentário'}">
+                    ${cText ? `<i class="fa-solid fa-circle theme-text text-[7px]"></i>` : `<i class="fa-regular fa-comment opacity-0 group-hover:opacity-100"></i>`}
+                  </button>
+                  ${hasVal ? `
+                    <button type="button" onclick="clearRecordField('${isoKey}', '${f}')" class="text-[10px] text-rose-400/50 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition" title="Excluir">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  ` : ''}
+                </div>
+              </div>
+            </td>
+          `;
+        }).join('');
 
-        let tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50 transition";
         tr.innerHTML = `
-          <td class="py-2.5 px-2 text-center font-bold border-r border-slate-200">SEG</td>
-          <td class="py-2.5 px-3 text-center border-r border-slate-200">${data}</td>
-          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${e1 || '--:--'}</td>
-          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${s1 || '--:--'}</td>
-          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${e2 || '--:--'}</td>
-          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${s2 || '--:--'}</td>
-          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200 font-semibold">${workedMin > 0 ? minutesToTimeString(workedMin) : '--:--'}</td>
-          <td class="py-2.5 px-3 text-center border-r border-slate-200">-</td>
-          <td class="py-2.5 px-2 text-center"><span class="opacity-30 text-[10px]">OK</span></td>
+          <td class="py-2 px-2 text-center font-bold text-[11px] border-r border-black/10">${WEEKDAYS[dayOfWeekIdx]}</td>
+          <td class="py-2 px-2 text-center text-[11px] border-r border-black/10">${formattedDateBR}</td>
+          ${cellsHtml}
+          <td class="py-2 px-2 text-center font-mono text-xs border-r border-black/10">${calc.workedMin !== null ? minutesToTimeString(calc.workedMin) : '--:--'}</td>
+          <td class="py-2 px-2 text-center border-r border-black/10"><span class="${heClass}">${heText}</span></td>
+          <td class="py-2 px-2 text-center">${alertsHtml || '<span class="opacity-30 text-[10px]">OK</span>'}</td>
         `;
         tbody.appendChild(tr);
-      });
+        curr.setDate(curr.getDate() + 1);
+      }
 
-      document.getElementById('kpiTrabalhado').textContent = minutesToTimeString(totalWorkedMinutes);
+      document.getElementById('periodSummaryBadge').textContent = `${totalDaysCount} dias no período`;
+      document.getElementById('footTotalTrab').textContent = minutesToTimeString(totalWorkedMinutes);
+      document.getElementById('footTotalExtra').textContent = minutesToTimeString(totalExtraMinutes, true);
       document.getElementById('kpiSaldo').textContent = minutesToTimeString(totalExtraMinutes, true);
+      document.getElementById('kpiTrabalhado').textContent = minutesToTimeString(totalWorkedMinutes);
+      document.getElementById('kpiDiasTrabalhados').textContent = `${daysWithWorkCount} plantões/dias`;
       document.getElementById('kpiAtrasos').textContent = lateCount;
+
+      const kpiStatus = document.getElementById('kpiStatus');
+      if (daysWithWorkCount === 0) kpiStatus.textContent = 'Sem Lançamentos';
+      else if (totalExtraMinutes > 0) kpiStatus.textContent = 'Saldo Positivo (+HE)';
+      else if (totalExtraMinutes < 0) kpiStatus.textContent = 'Horas em Débito';
+      else kpiStatus.textContent = 'Saldo Zerado';
+    }
+
+    function handleManualPunch(e) {
+      e.preventDefault();
+      const dateVal = document.getElementById('punchDate').value;
+      const timeVal = document.getElementById('punchTime').value;
+      const punchType = document.querySelector('input[name="punchType"]:checked').value;
+
+      if (!dateVal || !timeVal) return;
+      if (!timeRecords[dateVal]) timeRecords[dateVal] = { e1: '', s1: '', e2: '', s2: '', comments: {} };
+
+      pushHistoryState();
+      timeRecords[dateVal][punchType] = timeVal;
+      autoSaveToDrive();
+      renderTable();
+      fillCurrentTime();
+      showToast("Ponto registrado e salvo no Drive!");
+    }
+
+    function exportToExcel() {
+      const startStr = document.getElementById('filterStart').value;
+      const endStr = document.getElementById('filterEnd').value;
+      if (!startStr || !endStr) return;
+
+      const startDate = parseISODate(startStr);
+      const endDate = parseISODate(endStr);
+      const rows = [["DIA", "DATA", "E1", "S1", "E2", "S2", "HORAS TRABALHADAS", "HE / DÉBITO"]];
+
+      let curr = new Date(startDate);
+      while (curr <= endDate) {
+        const isoKey = formatDateISO(curr);
+        const dayIdx = curr.getDay();
+        const rec = timeRecords[isoKey] || { e1: '', s1: '', e2: '', s2: '' };
+        const calc = calculateDay(rec, dayIdx === 0 || dayIdx === 6);
+
+        rows.push([
+          WEEKDAYS[dayIdx],
+          `${String(curr.getDate()).padStart(2, '0')}/${String(curr.getMonth() + 1).padStart(2, '0')}/${curr.getFullYear()}`,
+          rec.e1 || '', rec.s1 || '', rec.e2 || '', rec.s2 || '',
+          calc.workedMin !== null ? minutesToTimeString(calc.workedMin) : '',
+          minutesToTimeString(calc.extraMin, true)
+        ]);
+        curr.setDate(curr.getDate() + 1);
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Controle de Ponto");
+      XLSX.writeFile(wb, `Controle_Ponto_MeuDrive.xlsx`);
+      showToast("Planilha Excel exportada com sucesso!");
     }
   </script>
 </body>
