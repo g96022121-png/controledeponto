@@ -98,7 +98,7 @@
           <i class="fa-solid fa-file-excel"></i> Excel (.xlsx)
         </button>
 
-        <!-- Botão Google Auth -->
+        <!-- Botão Google Auth Direto -->
         <div id="authContainer">
           <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-md flex items-center gap-2">
             <i class="fa-brands fa-google text-blue-500"></i> Entrar com Google
@@ -113,7 +113,7 @@
     <div class="max-w-7xl mx-auto w-full flex items-center justify-between">
       <div class="flex items-center gap-2">
         <i id="bannerIcon" class="fa-solid fa-triangle-exclamation text-amber-400"></i>
-        <span id="bannerText">Faça login com sua conta Google para carregar e salvar automaticamente os dados no seu Google Drive[cite: 1].</span>
+        <span id="bannerText">Faça login com sua conta Google para carregar e salvar automaticamente os dados no seu Google Drive.</span>
       </div>
       <div id="syncIndicator" class="text-[10px] bg-black/30 font-mono font-bold px-2.5 py-0.5 rounded-full border border-white/10">
         Aguardando Login
@@ -209,7 +209,7 @@
               <div class="flex items-center justify-between mb-1">
                 <label class="block text-xs font-semibold opacity-80">Horário (HH:MM)</label>
                 <button type="button" onclick="fillCurrentTime()" class="text-[11px] theme-text hover:underline font-medium flex items-center gap-1">
-                  <i class="fa-regular fa-clock"></i> Usar hora atual[cite: 1]
+                  <i class="fa-regular fa-clock"></i> Usar hora atual
                 </button>
               </div>
               <input type="time" id="punchTime" required class="w-full theme-input border text-base font-mono rounded-lg focus:ring-2 focus:ring-blue-500 block p-2.5 outline-none font-bold">
@@ -300,7 +300,7 @@
               <i class="fa-solid fa-table-cells opacity-70"></i>
               <h3 class="font-bold text-sm">Espelho de Ponto</h3>
             </div>
-            <span id="liveStatusBadge" class="text-xs text-emerald-400 font-semibold">Sincronizado com Google Drive[cite: 1]</span>
+            <span id="liveStatusBadge" class="text-xs text-emerald-400 font-semibold">Sincronizado com Google Drive</span>
           </div>
 
           <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
@@ -336,14 +336,14 @@
   </main>
 
   <div class="fixed bottom-1.5 right-3 text-[10px] opacity-25 hover:opacity-75 transition-opacity pointer-events-none select-none font-mono z-40">
-    Glédson Lopes - Tecnologia da Informação[cite: 1]
+    Glédson Lopes - Tecnologia da Informação
   </div>
 
   <script>
     const CLIENT_ID = '413707131156-f35b9jrjhr9m04h6ss2r4l2e0ndcjnke.apps.googleusercontent.com';
     const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 
-    let tokenClient;
+    let tokenClient = null;
     let accessToken = null;
     let spreadsheetIdGlobal = null;
 
@@ -404,7 +404,7 @@
       updateUndoRedoButtons();
       autoSaveToDrive();
       renderTable();
-      showToast("Ação desfeita!");[cite: 1]
+      showToast("Ação desfeita!");
     }
 
     function redoAction() {
@@ -421,7 +421,7 @@
       updateUndoRedoButtons();
       autoSaveToDrive();
       renderTable();
-      showToast("Ação refeita!");[cite: 1]
+      showToast("Ação refeita!");
     }
 
     window.addEventListener('keydown', (e) => {
@@ -447,21 +447,26 @@
       applyThemeUI();
       applyShiftUI();
 
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (response) => {
-          if (response.error !== undefined) {
-            showToast("Erro ao autenticar com o Google.", true);[cite: 1]
-            return;
-          }
-          accessToken = response.access_token;
-          localStorage.setItem('google_access_token', accessToken);
-          onLoginSuccess();
-        },
-      });
+      // Inicializa o cliente do Google com atraso seguro para evitar travamentos de carregamento do SDK
+      setTimeout(() => {
+        if (typeof google !== 'undefined' && google.accounts) {
+          tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: (response) => {
+              if (response.error !== undefined) {
+                showToast("Erro ao autenticar com o Google.", true);
+                return;
+              }
+              accessToken = response.access_token;
+              localStorage.setItem('google_access_token', accessToken);
+              onLoginSuccess();
+            },
+          });
+        }
+      }, 500);
 
-      // Verifica se já existe um token salvo no navegador para manter conectado
+      // Mantém conectado se já houver token salvo
       const savedToken = localStorage.getItem('google_access_token');
       if (savedToken) {
         accessToken = savedToken;
@@ -470,7 +475,12 @@
     };
 
     function handleAuthClick() {
-      tokenClient.requestAccessToken({ prompt: '' });
+      if (tokenClient) {
+        tokenClient.requestAccessToken({ prompt: '' });
+      } else {
+        showToast("Inicializando Google Auth, aguarde um segundo...", true);
+        setTimeout(handleAuthClick, 1000);
+      }
     }
 
     function signOut() {
@@ -487,11 +497,11 @@
       document.getElementById('dbFileStatus').className = 'text-[11px] px-2 py-0.5 rounded-md font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5';
       document.getElementById('dbFileStatus').innerHTML = `<i class="fa-solid fa-circle text-[7px] text-rose-400"></i> Desconectado`;
       document.getElementById('mainContent').classList.add('hidden');
-      showToast("Você saiu da conta.");[cite: 1]
+      showToast("Você saiu da conta.");
     }
 
     async function onLoginSuccess() {
-      showToast("Login realizado com sucesso!");[cite: 1]
+      showToast("Login realizado com sucesso!");
       document.getElementById('authContainer').innerHTML = `
         <button onclick="signOut()" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2">
           <i class="fa-solid fa-right-from-bracket"></i> Sair
@@ -505,7 +515,7 @@
     }
 
     async function sincronizarAutomaticoDrive() {
-      showToast("Sincronizando com o Google Drive...");[cite: 1]
+      showToast("Sincronizando com o Google Drive...");
       try {
         const query = encodeURIComponent("name = 'BancoDePonto_MeuDrive' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
         const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
@@ -525,14 +535,13 @@
         const sheetData = await sheetRes.json();
         
         processarDadosPlanilha(sheetData.values || []);
-        showToast("Sincronizado com sucesso!");[cite: 1]
+        showToast("Sincronizado com sucesso!");
       } catch (err) {
         console.error(err);
-        // Se der erro 401 (token expirado/inválido), limpa o storage e exige novo login
         if (err.status === 401 || (err.message && err.message.includes('401'))) {
           signOut();
         }
-        showToast("Erro ao sincronizar com o Drive.", true);[cite: 1]
+        showToast("Erro ao sincronizar com o Drive.", true);
       }
     }
 
@@ -571,7 +580,7 @@
       timeRecords = {};
       if (!linhas || linhas.length === 0) return;
 
-      const configRow = linhas[1]; // Linha 2 com as configurações salvas
+      const configRow = linhas[1];
       if (configRow) {
         if (configRow[0] && COLOR_THEMES[configRow[0]]) {
           currentThemeKey = configRow[0];
@@ -609,7 +618,7 @@
 
     function autoSaveToDrive() {
       const syncIndicator = document.getElementById('syncIndicator');
-      if (syncIndicator) syncIndicator.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Salvando...`;[cite: 1]
+      if (syncIndicator) syncIndicator.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Salvando...`;
 
       clearTimeout(autoSaveTimer);
       autoSaveTimer = setTimeout(async () => {
@@ -673,7 +682,7 @@
       currentThemeKey = newTheme;
       applyThemeUI();
       autoSaveToDrive();
-      showToast(`Tema alterado para: ${COLOR_THEMES[newTheme].name}`);[cite: 1]
+      showToast(`Tema alterado para: ${COLOR_THEMES[newTheme].name}`);
     }
 
     function applyThemeUI() {
@@ -702,7 +711,7 @@
       applyShiftUI();
       autoSaveToDrive();
       renderTable();
-      showToast(`Escala alterada para: ${SHIFT_CONFIGS[newShift].name}`);[cite: 1]
+      showToast(`Escala alterada para: ${SHIFT_CONFIGS[newShift].name}`);
     }
 
     function applyShiftUI() {
@@ -778,7 +787,7 @@
         else timeRecords[isoDate].comments[field] = newComment.trim();
         autoSaveToDrive();
         renderTable();
-        showToast("Comentário salvo!");[cite: 1]
+        showToast("Comentário salvo!");
       }
     }
 
@@ -791,7 +800,7 @@
         autoSaveToDrive();
         renderTable();
         updateNextPunchSuggestion();
-        showToast(`Registro ${field.toUpperCase()} excluído.`);[cite: 1]
+        showToast(`Registro ${field.toUpperCase()} excluído.`);
       }
     }
 
@@ -805,7 +814,7 @@
         autoSaveToDrive();
         renderTable();
         updateNextPunchSuggestion();
-        showToast("Registro atualizado!");[cite: 1]
+        showToast("Registro atualizado!");
       }
     }
 
@@ -988,7 +997,7 @@
       renderTable();
       updateNextPunchSuggestion();
       fillCurrentTime();
-      showToast("Ponto registrado e salvo no Drive!");[cite: 1]
+      showToast("Ponto registrado e salvo no Drive!");
     }
 
     function exportToExcel() {
@@ -1021,7 +1030,7 @@
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Controle de Ponto");
       XLSX.writeFile(wb, `Controle_Ponto_MeuDrive.xlsx`);
-      showToast("Planilha Excel exportada com sucesso!");[cite: 1]
+      showToast("Planilha Excel exportada com sucesso!");
     }
   </script>
 </body>
