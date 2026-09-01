@@ -113,7 +113,7 @@
     <div class="max-w-7xl mx-auto w-full flex items-center justify-between">
       <div class="flex items-center gap-2">
         <i id="bannerIcon" class="fa-solid fa-triangle-exclamation text-amber-400"></i>
-        <span id="bannerText">Faça login com sua conta Google para carregar e salvar automaticamente os dados no seu Google Drive.</span>
+        <span id="bannerText">Faça login com sua conta Google para carregar e salvar automaticamente os dados no seu Google Drive.[cite: 1]</span>
       </div>
       <div id="syncIndicator" class="text-[10px] bg-black/30 font-mono font-bold px-2.5 py-0.5 rounded-full border border-white/10">
         Aguardando Login
@@ -180,7 +180,7 @@
           <form id="punchForm" onsubmit="handleManualPunch(event)" class="space-y-4">
             <div>
               <label class="block text-xs font-semibold opacity-80 mb-1">Data da Batida</label>
-              <input type="date" id="punchDate" required class="w-full theme-input border text-sm rounded-lg focus:ring-2 focus:ring-blue-500 block p-2.5 outline-none font-medium">
+              <input type="date" id="punchDate" onchange="updateNextPunchSuggestion()" required class="w-full theme-input border text-sm rounded-lg focus:ring-2 focus:ring-blue-500 block p-2.5 outline-none font-medium">
             </div>
 
             <div>
@@ -209,7 +209,7 @@
               <div class="flex items-center justify-between mb-1">
                 <label class="block text-xs font-semibold opacity-80">Horário (HH:MM)</label>
                 <button type="button" onclick="fillCurrentTime()" class="text-[11px] theme-text hover:underline font-medium flex items-center gap-1">
-                  <i class="fa-regular fa-clock"></i> Usar hora atual
+                  <i class="fa-regular fa-clock"></i> Usar hora atual[cite: 1]
                 </button>
               </div>
               <input type="time" id="punchTime" required class="w-full theme-input border text-base font-mono rounded-lg focus:ring-2 focus:ring-blue-500 block p-2.5 outline-none font-bold">
@@ -252,14 +252,14 @@
                 <label class="block text-xs font-semibold opacity-80 mb-1.5 flex items-center gap-1.5">
                   <i class="fa-regular fa-calendar-plus theme-text"></i> Período - De
                 </label>
-                <input type="date" id="filterStart" onchange="renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                <input type="date" id="filterStart" onchange="autoSaveToDrive(); renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
               </div>
               <span class="opacity-50 font-bold self-center pt-5">até</span>
               <div>
                 <label class="block text-xs font-semibold opacity-80 mb-1.5 flex items-center gap-1.5">
                   <i class="fa-regular fa-calendar-check theme-text"></i> Até
                 </label>
-                <input type="date" id="filterEnd" onchange="renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                <input type="date" id="filterEnd" onchange="autoSaveToDrive(); renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
               </div>
             </div>
 
@@ -300,7 +300,7 @@
               <i class="fa-solid fa-table-cells opacity-70"></i>
               <h3 class="font-bold text-sm">Espelho de Ponto</h3>
             </div>
-            <span id="liveStatusBadge" class="text-xs text-emerald-400 font-semibold">Sincronizado com Google Drive</span>
+            <span id="liveStatusBadge" class="text-xs text-emerald-400 font-semibold">Sincronizado com Google Drive[cite: 1]</span>
           </div>
 
           <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
@@ -336,7 +336,7 @@
   </main>
 
   <div class="fixed bottom-1.5 right-3 text-[10px] opacity-25 hover:opacity-75 transition-opacity pointer-events-none select-none font-mono z-40">
-    Glédson Lopes - Tecnologia da Informação
+    Glédson Lopes - Tecnologia da Informação[cite: 1]
   </div>
 
   <script>
@@ -404,7 +404,7 @@
       updateUndoRedoButtons();
       autoSaveToDrive();
       renderTable();
-      showToast("Ação desfeita!");
+      showToast("Ação desfeita!");[cite: 1]
     }
 
     function redoAction() {
@@ -421,7 +421,7 @@
       updateUndoRedoButtons();
       autoSaveToDrive();
       renderTable();
-      showToast("Ação refeita!");
+      showToast("Ação refeita!");[cite: 1]
     }
 
     window.addEventListener('keydown', (e) => {
@@ -452,7 +452,7 @@
         scope: SCOPES,
         callback: (response) => {
           if (response.error !== undefined) {
-            showToast("Erro ao autenticar com o Google.", true);
+            showToast("Erro ao autenticar com o Google.", true);[cite: 1]
             return;
           }
           accessToken = response.access_token;
@@ -477,11 +477,11 @@
       document.getElementById('dbFileStatus').className = 'text-[11px] px-2 py-0.5 rounded-md font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5';
       document.getElementById('dbFileStatus').innerHTML = `<i class="fa-solid fa-circle text-[7px] text-rose-400"></i> Desconectado`;
       document.getElementById('mainContent').classList.add('hidden');
-      showToast("Você saiu da conta.");
+      showToast("Você saiu da conta.");[cite: 1]
     }
 
     async function onLoginSuccess() {
-      showToast("Login realizado com sucesso!");
+      showToast("Login realizado com sucesso!");[cite: 1]
       document.getElementById('authContainer').innerHTML = `
         <button onclick="signOut()" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2">
           <i class="fa-solid fa-right-from-bracket"></i> Sair
@@ -495,7 +495,7 @@
     }
 
     async function sincronizarAutomaticoDrive() {
-      showToast("Sincronizando com o Google Drive...");
+      showToast("Sincronizando com o Google Drive...");[cite: 1]
       try {
         const query = encodeURIComponent("name = 'BancoDePonto_MeuDrive' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
         const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
@@ -509,16 +509,16 @@
           spreadsheetIdGlobal = await criarPlanilhaNoDrive();
         }
 
-        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:E200`, {
+        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:H200`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
         const sheetData = await sheetRes.json();
         
         processarDadosPlanilha(sheetData.values || []);
-        showToast("Sincronizado com sucesso!");
+        showToast("Sincronizado com sucesso!");[cite: 1]
       } catch (err) {
         console.error(err);
-        showToast("Erro ao sincronizar com o Drive.", true);
+        showToast("Erro ao sincronizar com o Drive.", true);[cite: 1]
       }
     }
 
@@ -537,10 +537,17 @@
         body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'APONTAMENTOS' } } }] })
       });
 
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:E1?valueInputOption=RAW`, {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:H2?valueInputOption=RAW`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ range: 'APONTAMENTOS!A1:E1', majorDimension: 'ROWS', values: [["Data", "E1", "S1", "E2", "S2"]] })
+        body: JSON.stringify({
+          range: 'APONTAMENTOS!A1:H2',
+          majorDimension: 'ROWS',
+          values: [
+            ["CONFIG_TEMA", "CONFIG_ESCALA", "PERIODO_INICIO", "PERIODO_FIM", "", "", "", ""],
+            ["cyber_blue", "8h", document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", "", "", ""]
+          ]
+        })
       });
 
       return spreadsheetId;
@@ -548,12 +555,35 @@
 
     function processarDadosPlanilha(linhas) {
       timeRecords = {};
-      if (!linhas || linhas.length <= 1) return;
+      if (!linhas || linhas.length === 0) return;
 
+      // Linha 1 guarda as configurações salvas (Tema, Escala, Período)
+      const configRow = linhas[0];
+      if (configRow && configRow[0] && COLOR_THEMES[configRow[0]]) {
+        currentThemeKey = configRow[0];
+        applyThemeUI();
+      }
+      if (configRow && configRow[1] && SHIFT_CONFIGS[configRow[1]]) {
+        currentShiftType = configRow[1];
+        applyShiftUI();
+      }
+      if (configRow && configRow[2]) {
+        document.getElementById('filterStart').value = configRow[2];
+      }
+      if (configRow && configRow[3]) {
+        document.getElementById('filterEnd').value = configRow[3];
+      }
+
+      // Linhas seguintes guardam os registros (começando da linha 3 em diante, ou linha 2 se ignorarmos cabeçalho)
       for (let i = 1; i < linhas.length; i++) {
         const row = linhas[i];
+        if (!row || row.length === 0) continue;
+        // Identificar se a linha é o cabeçalho de dados ou registro
+        if (row[0] === "CONFIG_TEMA" || row[0] === "Data") continue;
+        
         const data = row[0];
-        if (!data) continue;
+        if (!data || !data.includes('-')) continue;
+
         timeRecords[data] = {
           e1: row[1] || '',
           s1: row[2] || '',
@@ -563,26 +593,33 @@
         };
       }
       renderTable();
+      updateNextPunchSuggestion();
     }
 
     function autoSaveToDrive() {
       const syncIndicator = document.getElementById('syncIndicator');
-      if (syncIndicator) syncIndicator.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Salvando...`;
+      if (syncIndicator) syncIndicator.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Salvando...`;[cite: 1]
 
       clearTimeout(autoSaveTimer);
       autoSaveTimer = setTimeout(async () => {
         if (!spreadsheetIdGlobal || !accessToken) return;
         try {
-          let rows = [["Data", "E1", "S1", "E2", "S2"]];
+          let rows = [
+            [currentThemeKey, currentShiftType, document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", "", "", ""],
+            ["Data", "E1", "S1", "E2", "S2"]
+          ];
+
           Object.keys(timeRecords).sort().forEach(date => {
             const r = timeRecords[date];
-            rows.push([date, r.e1 || '', r.s1 || '', r.e2 || '', r.s2 || '']);
+            if (r.e1 || r.s1 || r.e2 || r.s2) {
+              rows.push([date, r.e1 || '', r.s1 || '', r.e2 || '', r.s2 || '']);
+            }
           });
 
-          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:E500?valueInputOption=USER_ENTERED`, {
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:H500?valueInputOption=USER_ENTERED`, {
             method: 'PUT',
             headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ range: 'APONTAMENTOS!A1:E500', majorDimension: 'ROWS', values: rows })
+            body: JSON.stringify({ range: 'APONTAMENTOS!A1:H500', majorDimension: 'ROWS', values: rows })
           });
 
           if (syncIndicator) {
@@ -595,12 +632,38 @@
       }, 500);
     }
 
+    function updateNextPunchSuggestion() {
+      const dateVal = document.getElementById('punchDate').value;
+      if (!dateVal) return;
+
+      const rec = timeRecords[dateVal] || { e1: '', s1: '', e2: '', s2: '' };
+      let nextType = 'e1';
+
+      if (!rec.e1) {
+        nextType = 'e1';
+      } else if (!rec.s1) {
+        nextType = 's1';
+      } else if (!rec.e2 && SHIFT_CONFIGS[currentShiftType].targetMinutes > 480) {
+        nextType = 'e2';
+      } else if (!rec.e2) {
+        nextType = 'e2';
+      } else if (!rec.s2) {
+        nextType = 's2';
+      } else {
+        nextType = 's2'; // Se já tiver tudo preenchido
+      }
+
+      const radio = document.querySelector(`input[name="punchType"][value="${nextType}"]`);
+      if (radio) radio.checked = true;
+    }
+
     function changeColorTheme(newTheme) {
       if (!COLOR_THEMES[newTheme]) return;
       pushHistoryState();
       currentThemeKey = newTheme;
       applyThemeUI();
-      showToast(`Tema alterado para: ${COLOR_THEMES[newTheme].name}`);
+      autoSaveToDrive();
+      showToast(`Tema alterado para: ${COLOR_THEMES[newTheme].name}`);[cite: 1]
     }
 
     function applyThemeUI() {
@@ -627,8 +690,9 @@
       pushHistoryState();
       currentShiftType = newShift;
       applyShiftUI();
+      autoSaveToDrive();
       renderTable();
-      showToast(`Escala alterada para: ${SHIFT_CONFIGS[newShift].name}`);
+      showToast(`Escala alterada para: ${SHIFT_CONFIGS[newShift].name}`);[cite: 1]
     }
 
     function applyShiftUI() {
@@ -658,7 +722,8 @@
     }
 
     function updateClock() {
-      document.getElementById('liveClock').textContent = new Date().toLocaleTimeString('pt-BR');
+      const now = new Date();
+      document.getElementById('liveClock').textContent = now.toLocaleTimeString('pt-BR');
     }
     setInterval(updateClock, 1000);
     updateClock();
@@ -703,7 +768,7 @@
         else timeRecords[isoDate].comments[field] = newComment.trim();
         autoSaveToDrive();
         renderTable();
-        showToast("Comentário salvo!");
+        showToast("Comentário salvo!");[cite: 1]
       }
     }
 
@@ -715,7 +780,8 @@
         if (timeRecords[isoDate].comments) delete timeRecords[isoDate].comments[field];
         autoSaveToDrive();
         renderTable();
-        showToast(`Registro ${field.toUpperCase()} excluído.`);
+        updateNextPunchSuggestion();
+        showToast(`Registro ${field.toUpperCase()} excluído.`);[cite: 1]
       }
     }
 
@@ -728,7 +794,8 @@
         timeRecords[isoDate][field] = newVal.trim();
         autoSaveToDrive();
         renderTable();
-        showToast("Registro atualizado!");
+        updateNextPunchSuggestion();
+        showToast("Registro atualizado!");[cite: 1]
       }
     }
 
@@ -909,8 +976,9 @@
       timeRecords[dateVal][punchType] = timeVal;
       autoSaveToDrive();
       renderTable();
+      updateNextPunchSuggestion();
       fillCurrentTime();
-      showToast("Ponto registrado e salvo no Drive!");
+      showToast("Ponto registrado e salvo no Drive!");[cite: 1]
     }
 
     function exportToExcel() {
@@ -943,7 +1011,7 @@
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Controle de Ponto");
       XLSX.writeFile(wb, `Controle_Ponto_MeuDrive.xlsx`);
-      showToast("Planilha Excel exportada com sucesso!");
+      showToast("Planilha Excel exportada com sucesso!");[cite: 1]
     }
   </script>
 </body>
