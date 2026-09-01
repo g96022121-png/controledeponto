@@ -6,9 +6,7 @@
   <title>Controle de Ponto - Meu Drive</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Google Identity Services SDK -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <!-- Google API Client Library -->
   <script src="https://apis.google.com/js/api.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -45,12 +43,33 @@
       </div>
     </div>
 
-    <!-- Conteúdo Principal (Oculto até fazer login) -->
+    <!-- Conteúdo Principal -->
     <div id="mainContent" class="grid grid-cols-1 lg:grid-cols-12 gap-6 hidden">
       
       <!-- Painel Esquerdo -->
       <div class="lg:col-span-4 space-y-6">
         
+        <!-- Registrar Ponto -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-clock text-blue-600"></i> Registrar Novo Ponto
+          </h2>
+          
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 mb-1">Data:</label>
+            <input type="date" id="inputDataRegistro" class="w-full border border-slate-300 bg-slate-50 text-xs rounded-xl p-2.5 outline-none font-mono">
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 mb-1">Hora:</label>
+            <input type="time" id="inputHoraRegistro" class="w-full border border-slate-300 bg-slate-50 text-xs rounded-xl p-2.5 outline-none font-mono">
+          </div>
+
+          <button onclick="salvarNovoRegistro()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-2">
+            <i class="fa-solid fa-plus"></i> Salvar no meu Drive
+          </button>
+        </div>
+
         <!-- Seletor de Escala -->
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
           <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
@@ -63,18 +82,9 @@
           </select>
         </div>
 
-        <!-- Gerenciamento de Registros -->
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Ações na Nuvem Pessoal:</label>
-          
-          <button onclick="carregarDadosDoDrive()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-2">
-            <i class="fa-solid fa-rotate"></i> Sincronizar com meu Drive
-          </button>
-
-          <div id="statusNuvem" class="text-[11px] text-slate-500 font-medium text-center">
-            Conectado ao seu Google Drive.
-          </div>
-        </div>
+        <button onclick="carregarDadosDoDrive()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-rotate"></i> Atualizar Tabela do Drive
+        </button>
 
       </div>
 
@@ -121,7 +131,7 @@
               </thead>
               <tbody id="tableBody" class="divide-y divide-slate-200 font-mono">
                 <tr>
-                  <td colspan="9" class="py-8 text-center text-slate-400 italic">Clique em sincronizar para carregar seus dados.</td>
+                  <td colspan="9" class="py-8 text-center text-slate-400 italic">Sincronize para carregar seus dados.</td>
                 </tr>
               </tbody>
             </table>
@@ -139,8 +149,15 @@
 
     let tokenClient;
     let accessToken = null;
+    let spreadsheetIdGlobal = null;
 
     window.onload = function () {
+      // Preenche data e hora atuais por padrão nos inputs
+      const hoje = new Date().toISOString().split('T')[0];
+      const horaAtual = new Date().toTimeString().substring(0, 5);
+      document.getElementById('inputDataRegistro').value = hoje;
+      document.getElementById('inputHoraRegistro').value = horaAtual;
+
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
@@ -190,21 +207,19 @@
         });
         const data = await res.json();
 
-        let spreadsheetId = null;
-
         if (data.files && data.files.length > 0) {
-          spreadsheetId = data.files[0].id;
+          spreadsheetIdGlobal = data.files[0].id;
         } else {
-          spreadsheetId = await criarPlanilhaNoDrive();
+          spreadsheetIdGlobal = await criarPlanilhaNoDrive();
         }
 
-        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:C50`, {
+        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:C100`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
         const sheetData = await sheetRes.json();
         
         processarDadosPlanilha(sheetData.values || []);
-        showToast("Dados sincronizados com seu Drive!");
+        showToast("Dados sincronizados com sucesso!");
       } catch (err) {
         console.error(err);
         showToast("Erro ao acessar o Google Drive.", true);
@@ -238,26 +253,58 @@
         })
       });
 
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:C5?valueInputOption=RAW`, {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:C1?valueInputOption=RAW`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          range: 'APONTAMENTOS!A1:C5',
+          range: 'APONTAMENTOS!A1:C1',
           majorDimension: 'ROWS',
-          values: [
-            ["Data", "Hora", "Tipo"],
-            ["2026-08-31", "08:00", "E1"],
-            ["2026-08-31", "12:00", "S1"],
-            ["2026-08-31", "13:00", "E2"],
-            ["2026-08-31", "18:00", "S2"]
-          ]
+          values: [["Data", "Hora", "Tipo"]]
         })
       });
 
       return spreadsheetId;
+    }
+
+    async function salvarNovoRegistro() {
+      if (!spreadsheetIdGlobal) {
+        showToast("Planilha não conectada!", true);
+        return;
+      }
+
+      const data = document.getElementById('inputDataRegistro').value;
+      const hora = document.getElementById('inputHoraRegistro').value;
+
+      if (!data || !hora) {
+        showToast("Preencha a data e a hora!", true);
+        return;
+      }
+
+      showToast("Salvando registro na nuvem...");
+
+      try {
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A:C:append?valueInputOption=USER_ENTERED`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            range: 'APONTAMENTOS!A:C',
+            majorDimension: 'ROWS',
+            values: [[data, hora, "Registro Web"]]
+          })
+        });
+
+        showToast("Ponto registrado com sucesso!");
+        carregarDadosDoDrive(); // Atualiza a tabela automaticamente
+      } catch (err) {
+        console.error(err);
+        showToast("Erro ao salvar registro.", true);
+      }
     }
 
     function processarDadosPlanilha(linhas) {
@@ -265,7 +312,7 @@
       tbody.innerHTML = '';
 
       if (linhas.length <= 1) {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 italic">Nenhum registro encontrado na sua planilha.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 italic">Nenhum registro encontrado. Insira o primeiro ponto ao lado.</td></tr>`;
         return;
       }
 
