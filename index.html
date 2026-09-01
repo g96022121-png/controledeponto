@@ -49,6 +49,17 @@
       <!-- Painel Esquerdo -->
       <div class="lg:col-span-4 space-y-6">
         
+        <!-- Status e Criação Manual da Planilha -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+          <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-file-excel text-emerald-600"></i> Banco de Dados no Drive
+          </h2>
+          <button onclick="forcarCriacaoOuConexaoPlanilha()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Criar/Conectar Planilha no Drive
+          </button>
+          <p id="statusPlanilhaDrive" class="text-[11px] text-slate-500 text-center font-mono">Planilha não vinculada.</p>
+        </div>
+
         <!-- Registrar Ponto -->
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
           <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
@@ -218,38 +229,47 @@
       setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
     }
 
-    async function obterOuCriarPlanilha() {
-      if (spreadsheetIdGlobal) return spreadsheetIdGlobal;
+    async function forcarCriacaoOuConexaoPlanilha() {
+      showToast("Verificando planilha no Drive...");
+      try {
+        const query = encodeURIComponent("name = 'BancoDePonto_MeuDrive' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const data = await res.json();
 
-      const query = encodeURIComponent("name = 'BancoDePonto_MeuDrive' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
-      const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      const data = await res.json();
+        if (data.files && data.files.length > 0) {
+          spreadsheetIdGlobal = data.files[0].id;
+          showToast("Planilha já existente conectada com sucesso!");
+        } else {
+          spreadsheetIdGlobal = await criarPlanilhaNoDrive();
+          showToast("Nova planilha criada no seu Drive!");
+        }
 
-      if (data.files && data.files.length > 0) {
-        spreadsheetIdGlobal = data.files[0].id;
-      } else {
-        spreadsheetIdGlobal = await criarPlanilhaNoDrive();
+        document.getElementById('statusPlanilhaDrive').textContent = `ID Vinculado: ${spreadsheetIdGlobal.substring(0, 10)}...`;
+        carregarDadosDoDrive();
+      } catch (err) {
+        console.error(err);
+        showToast("Erro ao criar/conectar planilha.", true);
       }
-      return spreadsheetIdGlobal;
     }
 
     async function carregarDadosDoDrive() {
-      showToast("Buscando planilha no seu Google Drive...");
       try {
-        const spreadsheetId = await obterOuCriarPlanilha();
+        if (!spreadsheetIdGlobal) {
+          await forcarCriacaoOuConexaoPlanilha();
+          return;
+        }
 
-        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:C100`, {
+        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:C100`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
         const sheetData = await sheetRes.json();
         
         processarDadosPlanilha(sheetData.values || []);
-        showToast("Dados sincronizados com sucesso!");
       } catch (err) {
         console.error(err);
-        showToast("Erro ao acessar o Google Drive.", true);
+        showToast("Erro ao carregar dados da planilha.", true);
       }
     }
 
@@ -297,24 +317,26 @@
     }
 
     async function salvarNovoRegistro() {
-      showToast("Salvando registro na nuvem...");
-
-      try {
-        const spreadsheetId = await obterOuCriarPlanilha();
-        if (!spreadsheetId) {
+      if (!spreadsheetIdGlobal) {
+        await forcarCriacaoOuConexaoPlanilha();
+        if (!spreadsheetIdGlobal) {
           showToast("Erro: Planilha não conectada", true);
           return;
         }
+      }
 
-        const data = document.getElementById('inputDataRegistro').value;
-        const hora = document.getElementById('inputHoraRegistro').value;
+      const data = document.getElementById('inputDataRegistro').value;
+      const hora = document.getElementById('inputHoraRegistro').value;
 
-        if (!data || !hora) {
-          showToast("Preencha a data e a hora!", true);
-          return;
-        }
+      if (!data || !hora) {
+        showToast("Preencha a data e a hora!", true);
+        return;
+      }
 
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A:C:append?valueInputOption=USER_ENTERED`, {
+      showToast("Salvando registro na nuvem...");
+
+      try {
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A:C:append?valueInputOption=USER_ENTERED`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -339,7 +361,7 @@
       const tbody = document.getElementById('tableBody');
       tbody.innerHTML = '';
 
-      if (linhas.length <= 1) {
+      if (!linhas || linhas.length <= 1) {
         tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 italic">Nenhum registro encontrado. Insira o primeiro ponto ao lado.</td></tr>`;
         return;
       }
