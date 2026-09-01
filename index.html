@@ -133,7 +133,6 @@
   </div>
 
   <script>
-    // Cole a URL do seu App da Web do Google Apps Script entre aspas abaixo:
     const URL_API_GOOGLE = "https://script.google.com/macros/s/AKfycbyF4UaH-iAdexZ7PW-UMNj6F6hZkVCq7z60PPMhaUb96DrjKXpr2ChjnqTwEPgBMCER/exec";
 
     const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
@@ -160,12 +159,7 @@
         return;
       }
 
-      if (URL_API_GOOGLE.includes("COLE_AQUI")) {
-        showToast("Você esqueceu de colar a URL do Apps Script no código HTML!", true);
-        return;
-      }
-
-      document.getElementById('statusNuvem.textContent = "Buscando na nuvem..."');
+      document.getElementById('statusNuvem').textContent = "Buscando na nuvem...";
       showToast("Consultando banco de dados no Google Sheets...");
 
       try {
