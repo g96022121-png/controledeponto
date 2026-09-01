@@ -456,19 +456,29 @@
             return;
           }
           accessToken = response.access_token;
+          localStorage.setItem('google_access_token', accessToken);
           onLoginSuccess();
         },
       });
+
+      // Verifica se já existe um token salvo no navegador para manter conectado
+      const savedToken = localStorage.getItem('google_access_token');
+      if (savedToken) {
+        accessToken = savedToken;
+        onLoginSuccess();
+      }
     };
 
     function handleAuthClick() {
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      tokenClient.requestAccessToken({ prompt: '' });
     }
 
     function signOut() {
       accessToken = null;
       spreadsheetIdGlobal = null;
       timeRecords = {};
+      localStorage.removeItem('google_access_token');
+
       document.getElementById('authContainer').innerHTML = `
         <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-md flex items-center gap-2">
           <i class="fa-brands fa-google text-blue-500"></i> Entrar com Google
@@ -518,6 +528,10 @@
         showToast("Sincronizado com sucesso!");[cite: 1]
       } catch (err) {
         console.error(err);
+        // Se der erro 401 (token expirado/inválido), limpa o storage e exige novo login
+        if (err.status === 401 || (err.message && err.message.includes('401'))) {
+          signOut();
+        }
         showToast("Erro ao sincronizar com o Drive.", true);[cite: 1]
       }
     }
