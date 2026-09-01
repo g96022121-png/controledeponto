@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controle de Ponto Online - Google Cloud</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; }
+  </style>
+</head>
+<body class="min-h-screen p-4 sm:p-6">
+
+  <!-- Toast Notification -->
+  <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-slate-700">
+      <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+      <span id="toastMsg" class="text-xs font-medium">Operação realizada com sucesso!</span>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="bg-slate-900 text-white p-5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="bg-blue-600 p-3 rounded-xl shadow-md">
+          <i class="fa-solid fa-cloud text-xl text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight">Controle de Ponto Online (Google Cloud)</h1>
+          <p id="userStatusLogin" class="text-xs text-slate-400 mt-0.5">Conectado ao Banco de Dados na Nuvem do Google</p>
+        </div>
+      </div>
+      <div>
+        <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2">
+          <i class="fa-solid fa-circle text-[8px]"></i> Nuvem Ativa
+        </span>
+      </div>
+    </div>
+
+    <!-- Controles Principais -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Painel Esquerdo -->
+      <div class="lg:col-span-4 space-y-6">
+        
+        <!-- Seletor de Escala -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+          <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left text-blue-600"></i> Carga Horária / Escala
+          </h2>
+          <select id="shiftTypeSelect" onchange="if(window.ultimoResultado) renderizarEspelhoPonto(window.ultimoResultado);" class="w-full border border-slate-300 bg-slate-50 text-xs font-bold rounded-xl p-3 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500">
+            <option value="8h">Jornada 8h (08:00 às 18:00 - Meta: 08:00)</option>
+            <option value="12x36_day">Plantão 12h Diurno (07:00 às 19:00 - Meta: 11:00)</option>
+            <option value="12x36_night">Plantão 12h Noturno (19:00 às 07:00 - Meta: 10:00)</option>
+          </select>
+          <p class="text-[11px] text-slate-500">Tolerância diária de ±10 minutos.</p>
+        </div>
+
+        <!-- Busca por Matrícula -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Consulta de Ponto:</label>
+          
+          <input type="text" id="inputMatricula" placeholder="Digite sua matrícula (Ex: 1234)..." class="w-full border border-slate-300 bg-slate-50 text-sm rounded-xl p-3 outline-none font-mono focus:ring-2 focus:ring-blue-500" value="1234">
+          
+          <button onclick="buscarPontoNuvem()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-2">
+            <i class="fa-solid fa-search"></i> Buscar na Nuvem
+          </button>
+
+          <div id="statusNuvem" class="text-[11px] text-slate-500 font-medium text-center">
+            Pronto para consultar. (Matrícula teste padrão: 1234)
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Painel Direito -->
+      <div class="lg:col-span-8 space-y-6">
+        
+        <!-- Cards de Resumo -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Saldo HE / Débito</p>
+            <div id="kpiSaldo" class="text-xl font-extrabold mt-1 font-mono text-blue-600">00:00</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Trabalhado</p>
+            <div id="kpiTrabalhado" class="text-xl font-extrabold mt-1 font-mono text-slate-800">00:00</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm col-span-2 sm:col-span-1">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Dias com Atraso</p>
+            <div id="kpiAtrasos" class="text-xl font-extrabold mt-1 text-amber-500 font-mono">0</div>
+          </div>
+        </div>
+
+        <!-- Tabela -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="p-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="font-bold text-sm text-slate-800"><i class="fa-solid fa-table-cells text-blue-600"></i> Espelho de Ponto (Google Cloud)</h3>
+            <span id="lblColaborador" class="text-xs text-blue-700 font-bold">Aguardando busca</span>
+          </div>
+
+          <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <table class="w-full text-xs text-left border-collapse" id="timesheetTable">
+              <thead class="text-[11px] uppercase bg-slate-900 text-white sticky top-0 z-20">
+                <tr>
+                  <th class="py-2.5 px-3 text-center border-r border-slate-700 w-12">DIA</th>
+                  <th class="py-2.5 px-3 text-center border-r border-slate-700 w-24">DATA</th>
+                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">E1</th>
+                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">S1</th>
+                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">E2</th>
+                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">S2</th>
+                  <th class="py-2.5 px-2 text-center border-r border-slate-700 w-20">H. TRAB.</th>
+                  <th class="py-2.5 px-3 text-center border-r border-slate-700 w-24">HE / DÉBITO</th>
+                  <th class="py-2.5 px-2 text-center w-40">STATUS / ALERTAS</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody" class="divide-y divide-slate-200 font-mono">
+                <tr>
+                  <td colspan="9" class="py-8 text-center text-slate-400 italic">Digite sua matrícula e clique em buscar.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Cole a URL do seu App da Web do Google Apps Script entre aspas abaixo:
+    const URL_API_GOOGLE = "https://script.google.com/macros/s/AKfycbyF4UaH-iAdexZ7PW-UMNj6F6hZkVCq7z60PPMhaUb96DrjKXpr2ChjnqTwEPgBMCER/exec";
+
+    const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+    const SHIFT_CONFIGS = {
+      '8h': { name: '8 Horas Padrão', targetMinutes: 480, lateThreshold: 480 },
+      '12x36_day': { name: 'Plantão 12h Diurno', targetMinutes: 660, lateThreshold: 420 },
+      '12x36_night': { name: 'Plantão 12h Noturno', targetMinutes: 600, lateThreshold: 1140 }
+    };
+
+    function showToast(msg, isError = false) {
+      const toast = document.getElementById('toastNotification');
+      const icon = document.getElementById('toastIcon');
+      const msgEl = document.getElementById('toastMsg');
+      msgEl.textContent = msg;
+      icon.className = isError ? 'fa-solid fa-triangle-exclamation text-rose-400 text-lg' : 'fa-solid fa-circle-check text-emerald-400 text-lg';
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+    }
+
+    async function buscarPontoNuvem() {
+      const matricula = document.getElementById('inputMatricula').value.trim();
+      if (!matricula) {
+        showToast("Digite uma matrícula!", true);
+        return;
+      }
+
+      if (URL_API_GOOGLE.includes("COLE_AQUI")) {
+        showToast("Você esqueceu de colar a URL do Apps Script no código HTML!", true);
+        return;
+      }
+
+      document.getElementById('statusNuvem.textContent = "Buscando na nuvem..."');
+      showToast("Consultando banco de dados no Google Sheets...");
+
+      try {
+        const response = await fetch(`${URL_API_GOOGLE}?action=buscar&matricula=${encodeURIComponent(matricula)}`);
+        const resultado = await response.json();
+
+        if (!resultado.sucesso) {
+          showToast(resultado.mensagem || "Funcionário não encontrado.", true);
+          document.getElementById('lblColaborador').textContent = "Não encontrado";
+          document.getElementById('statusNuvem').textContent = "Busca finalizada (Sem registros)";
+          return;
+        }
+
+        window.ultimoResultado = resultado;
+        document.getElementById('lblColaborador').textContent = `${resultado.usuario.nome} (Matrícula: ${resultado.usuario.matricula})`;
+        document.getElementById('statusNuvem').innerHTML = `<strong class="text-emerald-600"><i class="fa-solid fa-check-circle"></i> Sincronizado com a Nuvem</strong>`;
+        
+        renderizarEspelhoPonto(resultado);
+        showToast("Dados carregados com sucesso da nuvem!");
+
+      } catch (err) {
+        console.error(err);
+        showToast("Erro ao conectar com a API do Google.", true);
+        document.getElementById('statusNuvem').textContent = "Erro de conexão.";
+      }
+    }
+
+    function timeToMinutes(tStr) {
+      if (!tStr || !tStr.includes(':')) return null;
+      const [h, m] = tStr.split(':').map(Number);
+      return isNaN(h) || isNaN(m) ? null : h * 60 + m;
+    }
+
+    function getMinutesDiff(startMin, endMin) {
+      if (startMin === null || endMin === null) return null;
+      return endMin >= startMin ? endMin - startMin : (endMin + 1440) - startMin;
+    }
+
+    function minutesToTimeString(minutes, showSign = false) {
+      if (minutes === null || isNaN(minutes)) return '--:--';
+      const sign = minutes < 0 ? '-' : (showSign && minutes > 0 ? '+' : '');
+      const absMin = Math.abs(minutes);
+      return `${sign}${String(Math.floor(absMin / 60)).padStart(2, '0')}:${String(absMin % 60).padStart(2, '0')}`;
+    }
+
+    function renderizarEspelhoPonto(resultado) {
+      const shiftKey = document.getElementById('shiftTypeSelect').value;
+      const shift = SHIFT_CONFIGS[shiftKey];
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+
+      const apontamentos = resultado.apontamentos || [];
+      if (apontamentos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 italic">Nenhum registro encontrado para este usuário.</td></tr>`;
+        return;
+      }
+
+      let diasAgrupados = {};
+      apontamentos.forEach(ap => {
+        let dataPart = ap.data || "";
+        let horaPart = ap.hora ? ap.hora.substring(0, 5) : "00:00";
+        if (!dataPart) return;
+
+        if (!diasAgrupados[dataPart]) diasAgrupados[dataPart] = [];
+        diasAgrupados[dataPart].push(horaPart);
+      });
+
+      let datasOrdenadas = Object.keys(diasAgrupados).sort();
+      let totalWorkedMinutes = 0;
+      let totalExtraMinutes = 0;
+      let lateCount = 0;
+
+      datasOrdenadas.forEach(data => {
+        let batidas = [...new Set(diasAgrupados[data])].sort();
+        let e1 = batidas[0] || null;
+        let s1 = batidas[1] || null;
+        let e2 = batidas[2] || null;
+        let s2 = batidas[3] || null;
+
+        let e1Min = timeToMinutes(e1);
+        let s1Min = timeToMinutes(s1);
+        let e2Min = timeToMinutes(e2);
+        let s2Min = timeToMinutes(s2);
+
+        let p1 = (e1Min !== null && s1Min !== null) ? getMinutesDiff(e1Min, s1Min) : 0;
+        let p2 = (e2Min !== null && s2Min !== null) ? getMinutesDiff(e2Min, s2Min) : 0;
+        let workedMin = p1 + p2;
+
+        if (workedMin === 0 && e1Min !== null && s2Min !== null && e2Min === null) {
+          workedMin = getMinutesDiff(e1Min, s2Min);
+        }
+
+        let diffMin = workedMin > 0 ? workedMin - shift.targetMinutes : -shift.targetMinutes;
+        let extraMin = Math.abs(diffMin) > 10 ? diffMin : 0;
+
+        if (workedMin > 0) totalWorkedMinutes += workedMin;
+        totalExtraMinutes += extraMin;
+
+        let isLate = e1Min !== null && e1Min > shift.lateThreshold;
+        if (isLate) lateCount++;
+
+        let alertsHtml = '';
+        if (isLate) alertsHtml += `<span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-600 font-semibold">Atraso</span> `;
+        if (batidas.length % 2 !== 0 && batidas.length > 0) alertsHtml += `<span class="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-600 font-semibold">Ímpar</span> `;
+        if (workedMin > 0 && workedMin < shift.targetMinutes) alertsHtml += `<span class="px-1.5 py-0.5 rounded text-[10px] bg-orange-500/20 text-orange-600 font-semibold">< Meta</span> `;
+        if (extraMin > 0) alertsHtml += `<span class="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-600 font-semibold">+HE</span> `;
+
+        let heClass = 'opacity-60';
+        let heText = '-';
+        if (extraMin > 0) {
+          heClass = 'text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200';
+          heText = `+${minutesToTimeString(extraMin)}`;
+        } else if (extraMin < 0) {
+          heClass = 'text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200';
+          heText = minutesToTimeString(extraMin);
+        } else if (workedMin > 0) {
+          heText = '00:00';
+        }
+
+        let dayOfWeekIdx = new Date(data.split('-').join('-')).getDay();
+        if (isNaN(dayOfWeekIdx)) dayOfWeekIdx = 0;
+
+        let tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50 transition";
+        tr.innerHTML = `
+          <td class="py-2.5 px-2 text-center font-bold border-r border-slate-200">${WEEKDAYS[dayOfWeekIdx] || '---'}</td>
+          <td class="py-2.5 px-3 text-center border-r border-slate-200">${data}</td>
+          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200 ${isLate ? 'text-amber-600 font-bold' : ''}">${e1 || '--:--'}</td>
+          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${s1 || '--:--'}</td>
+          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${e2 || '--:--'}</td>
+          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${s2 || '--:--'}</td>
+          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200 font-semibold">${workedMin > 0 ? minutesToTimeString(workedMin) : '--:--'}</td>
+          <td class="py-2.5 px-3 text-center border-r border-slate-200"><span class="${heClass}">${heText}</span></td>
+          <td class="py-2.5 px-2 text-center">${alertsHtml || '<span class="opacity-30 text-[10px]">OK</span>'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('kpiTrabalhado').textContent = minutesToTimeString(totalWorkedMinutes);
+      document.getElementById('kpiSaldo').textContent = minutesToTimeString(totalExtraMinutes, true);
+      document.getElementById('kpiAtrasos').textContent = lateCount;
+    }
+  </script>
+</body>
+</html>
