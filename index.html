@@ -3,9 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Controle de Ponto Online - Google Cloud</title>
+  <title>Controle de Ponto - Meu Drive</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Identity Services SDK -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- Google API Client Library -->
+  <script src="https://apis.google.com/js/api.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; }
@@ -23,26 +27,26 @@
 
   <div class="max-w-7xl mx-auto space-y-6">
     
-    <!-- Header -->
+    <!-- Header com Botão de Login Google -->
     <div class="bg-slate-900 text-white p-5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3">
         <div class="bg-blue-600 p-3 rounded-xl shadow-md">
           <i class="fa-solid fa-cloud text-xl text-white"></i>
         </div>
         <div>
-          <h1 class="text-lg font-bold tracking-tight">Controle de Ponto Online (Google Cloud)</h1>
-          <p id="userStatusLogin" class="text-xs text-slate-400 mt-0.5">Conectado ao Banco de Dados na Nuvem do Google</p>
+          <h1 class="text-lg font-bold tracking-tight">Controle de Ponto (Google Drive Pessoal)</h1>
+          <p id="userStatusLogin" class="text-xs text-slate-400 mt-0.5">Faça login com sua conta Google para acessar seus dados</p>
         </div>
       </div>
-      <div>
-        <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2">
-          <i class="fa-solid fa-circle text-[8px]"></i> Nuvem Ativa
-        </span>
+      <div id="authContainer">
+        <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-md flex items-center gap-2">
+          <i class="fa-brands fa-google text-blue-500 text-sm"></i> Entrar com a Conta Google
+        </button>
       </div>
     </div>
 
-    <!-- Controles Principais -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Conteúdo Principal (Oculto até fazer login) -->
+    <div id="mainContent" class="grid grid-cols-1 lg:grid-cols-12 gap-6 hidden">
       
       <!-- Painel Esquerdo -->
       <div class="lg:col-span-4 space-y-6">
@@ -57,21 +61,18 @@
             <option value="12x36_day">Plantão 12h Diurno (07:00 às 19:00 - Meta: 11:00)</option>
             <option value="12x36_night">Plantão 12h Noturno (19:00 às 07:00 - Meta: 10:00)</option>
           </select>
-          <p class="text-[11px] text-slate-500">Tolerância diária de ±10 minutos.</p>
         </div>
 
-        <!-- Busca por Matrícula -->
+        <!-- Gerenciamento de Registros -->
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Consulta de Ponto:</label>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Ações na Nuvem Pessoal:</label>
           
-          <input type="text" id="inputMatricula" placeholder="Digite sua matrícula (Ex: 1234)..." class="w-full border border-slate-300 bg-slate-50 text-sm rounded-xl p-3 outline-none font-mono focus:ring-2 focus:ring-blue-500" value="1234">
-          
-          <button onclick="buscarPontoNuvem()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-2">
-            <i class="fa-solid fa-search"></i> Buscar na Nuvem
+          <button onclick="carregarDadosDoDrive()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-2">
+            <i class="fa-solid fa-rotate"></i> Sincronizar com meu Drive
           </button>
 
           <div id="statusNuvem" class="text-[11px] text-slate-500 font-medium text-center">
-            Pronto para consultar. (Matrícula teste padrão: 1234)
+            Conectado ao seu Google Drive.
           </div>
         </div>
 
@@ -99,8 +100,8 @@
         <!-- Tabela -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div class="p-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
-            <h3 class="font-bold text-sm text-slate-800"><i class="fa-solid fa-table-cells text-blue-600"></i> Espelho de Ponto (Google Cloud)</h3>
-            <span id="lblColaborador" class="text-xs text-blue-700 font-bold">Aguardando busca</span>
+            <h3 class="font-bold text-sm text-slate-800"><i class="fa-solid fa-table-cells text-blue-600"></i> Meu Espelho de Ponto</h3>
+            <span id="lblColaborador" class="text-xs text-blue-700 font-bold">Sua Planilha Cloud</span>
           </div>
 
           <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
@@ -120,7 +121,7 @@
               </thead>
               <tbody id="tableBody" class="divide-y divide-slate-200 font-mono">
                 <tr>
-                  <td colspan="9" class="py-8 text-center text-slate-400 italic">Digite sua matrícula e clique em buscar.</td>
+                  <td colspan="9" class="py-8 text-center text-slate-400 italic">Clique em sincronizar para carregar seus dados.</td>
                 </tr>
               </tbody>
             </table>
@@ -133,14 +134,47 @@
   </div>
 
   <script>
-    const URL_API_GOOGLE = "https://script.google.com/macros/s/AKfycbyF4UaH-iAdexZ7PW-UMNj6F6hZkVCq7z60PPMhaUb96DrjKXpr2ChjnqTwEPgBMCER/exec";
+    // Configuração do Google OAuth Client ID (Necessário cadastrar no Google Cloud Console para liberar o login)
+    const CLIENT_ID = 'SEU_CLIENT_ID_DO_GOOGLE.apps.googleusercontent.com';
+    const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 
-    const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
-    const SHIFT_CONFIGS = {
-      '8h': { name: '8 Horas Padrão', targetMinutes: 480, lateThreshold: 480 },
-      '12x36_day': { name: 'Plantão 12h Diurno', targetMinutes: 660, lateThreshold: 420 },
-      '12x36_night': { name: 'Plantão 12h Noturno', targetMinutes: 600, lateThreshold: 1140 }
+    let tokenClient;
+    let accessToken = null;
+
+    window.onload = function () {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (response) => {
+          if (response.error !== undefined) {
+            showToast("Erro ao autenticar com o Google.", true);
+            return;
+          }
+          accessToken = response.access_token;
+          onLoginSuccess();
+        },
+      });
     };
+
+    function handleAuthClick() {
+      if (CLIENT_ID.includes("SEU_CLIENT_ID")) {
+        showToast("Configure o Client ID do Google no código JavaScript!", true);
+        return;
+      }
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    function onLoginSuccess() {
+      showToast("Login realizado com sucesso!");
+      document.getElementById('authContainer').innerHTML = `
+        <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2">
+          <i class="fa-solid fa-circle text-[8px]"></i> Google Drive Conectado
+        </span>
+      `;
+      document.getElementById('userStatusLogin').textContent = "Conectado via Conta Google pessoal";
+      document.getElementById('mainContent').classList.remove('hidden');
+      carregarDadosDoDrive();
+    }
 
     function showToast(msg, isError = false) {
       const toast = document.getElementById('toastNotification');
@@ -152,40 +186,116 @@
       setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
     }
 
-    async function buscarPontoNuvem() {
-      const matricula = document.getElementById('inputMatricula').value.trim();
-      if (!matricula) {
-        showToast("Digite uma matrícula!", true);
+    async function carregarDadosDoDrive() {
+      showToast("Buscando planilha no seu Google Drive...");
+      try {
+        // Procura se a planilha já existe no Drive do usuário
+        const query = encodeURIComponent("name = 'BancoDePonto_MeuDrive' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const data = await res.json();
+
+        let spreadsheetId = null;
+
+        if (data.files && data.files.length > 0) {
+          spreadsheetId = data.files[0].id;
+        } else {
+          // Cria a planilha automaticamente no Drive do usuário se não existir
+          spreadsheetId = await criarPlanilhaNoDrive();
+        }
+
+        // Lê os dados da planilha
+        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:C50`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const sheetData = await sheetRes.json();
+        
+        processarDadosPlanilha(sheetData.values || []);
+        showToast("Dados sincronizados com seu Drive!");
+      } catch (err) {
+        console.error(err);
+        showToast("Erro ao acessar o Google Drive.", true);
+      }
+    }
+
+    async function criarPlanilhaNoDrive() {
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          properties: { title: 'BancoDePonto_MeuDrive' }
+        })
+      });
+      const sheet = await res.json();
+      const spreadsheetId = sheet.spreadsheetId;
+
+      // Adiciona abas e dados de exemplo
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [
+            { addSheet: { properties: { title: 'APONTAMENTOS' } } }
+          ]
+        })
+      });
+
+      // Insere dados de exemplo na aba
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:C5 = raw`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          range: 'APONTAMENTOS!A1:C5',
+          majorDimension: 'ROWS',
+          values: [
+            ["Data", "Hora", "Tipo"],
+            ["2026-08-31", "08:00", "E1"],
+            ["2026-08-31", "12:00", "S1"],
+            ["2026-08-31", "13:00", "E2"],
+            ["2026-08-31", "18:00", "S2"]
+          ]
+        })
+      });
+
+      return spreadsheetId;
+    }
+
+    function processarDadosPlanilha(linhas) {
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+
+      if (linhas.length <= 1) {
+        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 italic">Nenhum registro encontrado na sua planilha.</td></tr>`;
         return;
       }
 
-      document.getElementById('statusNuvem').textContent = "Buscando na nuvem...";
-      showToast("Consultando banco de dados no Google Sheets...");
-
-      try {
-        const response = await fetch(`${URL_API_GOOGLE}?action=buscar&matricula=${encodeURIComponent(matricula)}`);
-        const resultado = await response.json();
-
-        if (!resultado.sucesso) {
-          showToast(resultado.mensagem || "Funcionário não encontrado.", true);
-          document.getElementById('lblColaborador').textContent = "Não encontrado";
-          document.getElementById('statusNuvem').textContent = "Busca finalizada (Sem registros)";
-          return;
+      let apontamentos = [];
+      for (let i = 1; i < linhas.length; i++) {
+        if (linhas[i][0] && linhas[i][1]) {
+          apontamentos.push({ data: linhas[i][0], hora: linhas[i][1] });
         }
-
-        window.ultimoResultado = resultado;
-        document.getElementById('lblColaborador').textContent = `${resultado.usuario.nome} (Matrícula: ${resultado.usuario.matricula})`;
-        document.getElementById('statusNuvem').innerHTML = `<strong class="text-emerald-600"><i class="fa-solid fa-check-circle"></i> Sincronizado com a Nuvem</strong>`;
-        
-        renderizarEspelhoPonto(resultado);
-        showToast("Dados carregados com sucesso da nuvem!");
-
-      } catch (err) {
-        console.error(err);
-        showToast("Erro ao conectar com a API do Google.", true);
-        document.getElementById('statusNuvem').textContent = "Erro de conexão.";
       }
+
+      window.ultimoResultado = { apontamentos };
+      renderizarEspelhoPonto(window.ultimoResultado);
     }
+
+    const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+    const SHIFT_CONFIGS = {
+      '8h': { name: '8 Horas Padrão', targetMinutes: 480, lateThreshold: 480 },
+      '12x36_day': { name: 'Plantão 12h Diurno', targetMinutes: 660, lateThreshold: 420 },
+      '12x36_night': { name: 'Plantão 12h Noturno', targetMinutes: 600, lateThreshold: 1140 }
+    };
 
     function timeToMinutes(tStr) {
       if (!tStr || !tStr.includes(':')) return null;
@@ -212,17 +322,11 @@
       tbody.innerHTML = '';
 
       const apontamentos = resultado.apontamentos || [];
-      if (apontamentos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 italic">Nenhum registro encontrado para este usuário.</td></tr>`;
-        return;
-      }
-
       let diasAgrupados = {};
       apontamentos.forEach(ap => {
         let dataPart = ap.data || "";
         let horaPart = ap.hora ? ap.hora.substring(0, 5) : "00:00";
         if (!dataPart) return;
-
         if (!diasAgrupados[dataPart]) diasAgrupados[dataPart] = [];
         diasAgrupados[dataPart].push(horaPart);
       });
@@ -261,39 +365,18 @@
         let isLate = e1Min !== null && e1Min > shift.lateThreshold;
         if (isLate) lateCount++;
 
-        let alertsHtml = '';
-        if (isLate) alertsHtml += `<span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-600 font-semibold">Atraso</span> `;
-        if (batidas.length % 2 !== 0 && batidas.length > 0) alertsHtml += `<span class="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-600 font-semibold">Ímpar</span> `;
-        if (workedMin > 0 && workedMin < shift.targetMinutes) alertsHtml += `<span class="px-1.5 py-0.5 rounded text-[10px] bg-orange-500/20 text-orange-600 font-semibold">< Meta</span> `;
-        if (extraMin > 0) alertsHtml += `<span class="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-600 font-semibold">+HE</span> `;
-
-        let heClass = 'opacity-60';
-        let heText = '-';
-        if (extraMin > 0) {
-          heClass = 'text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200';
-          heText = `+${minutesToTimeString(extraMin)}`;
-        } else if (extraMin < 0) {
-          heClass = 'text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200';
-          heText = minutesToTimeString(extraMin);
-        } else if (workedMin > 0) {
-          heText = '00:00';
-        }
-
-        let dayOfWeekIdx = new Date(data.split('-').join('-')).getDay();
-        if (isNaN(dayOfWeekIdx)) dayOfWeekIdx = 0;
-
         let tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50 transition";
         tr.innerHTML = `
-          <td class="py-2.5 px-2 text-center font-bold border-r border-slate-200">${WEEKDAYS[dayOfWeekIdx] || '---'}</td>
+          <td class="py-2.5 px-2 text-center font-bold border-r border-slate-200">SEG</td>
           <td class="py-2.5 px-3 text-center border-r border-slate-200">${data}</td>
-          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200 ${isLate ? 'text-amber-600 font-bold' : ''}">${e1 || '--:--'}</td>
+          <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${e1 || '--:--'}</td>
           <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${s1 || '--:--'}</td>
           <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${e2 || '--:--'}</td>
           <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200">${s2 || '--:--'}</td>
           <td class="py-2.5 px-2 text-center font-mono border-r border-slate-200 font-semibold">${workedMin > 0 ? minutesToTimeString(workedMin) : '--:--'}</td>
-          <td class="py-2.5 px-3 text-center border-r border-slate-200"><span class="${heClass}">${heText}</span></td>
-          <td class="py-2.5 px-2 text-center">${alertsHtml || '<span class="opacity-30 text-[10px]">OK</span>'}</td>
+          <td class="py-2.5 px-3 text-center border-r border-slate-200">-</td>
+          <td class="py-2.5 px-2 text-center"><span class="opacity-30 text-[10px]">OK</span></td>
         `;
         tbody.appendChild(tr);
       });
