@@ -180,7 +180,6 @@
       spreadsheetIdGlobal = null;
       window.ultimoResultado = null;
 
-      // Restaura o botão de login no cabeçalho
       document.getElementById('authContainer').innerHTML = `
         <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-md flex items-center gap-2">
           <i class="fa-brands fa-google text-blue-500 text-sm"></i> Entrar com a Conta Google
@@ -191,7 +190,7 @@
       showToast("Você saiu da conta com sucesso.");
     }
 
-    function onLoginSuccess() {
+    async function onLoginSuccess() {
       showToast("Login realizado com sucesso!");
       document.getElementById('authContainer').innerHTML = `
         <div class="flex items-center gap-2">
@@ -205,7 +204,9 @@
       `;
       document.getElementById('userStatusLogin').textContent = "Conectado via Conta Google pessoal";
       document.getElementById('mainContent').classList.remove('hidden');
-      carregarDadosDoDrive();
+      
+      // Aguarda a obtenção correta do ID da planilha antes de liberar os botões
+      await carregarDadosDoDrive();
     }
 
     function showToast(msg, isError = false) {
@@ -291,8 +292,9 @@
 
     async function salvarNovoRegistro() {
       if (!spreadsheetIdGlobal) {
-        showToast("Planilha não conectada!", true);
-        return;
+        showToast("Aguarde a planilha conectar...", true);
+        await carregarDadosDoDrive();
+        if (!spreadsheetIdGlobal) return;
       }
 
       const data = document.getElementById('inputDataRegistro').value;
