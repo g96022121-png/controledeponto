@@ -8,9 +8,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- Google Identity Services SDK -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  
+  <!-- GSI SDK modificado para inicializar imediatamente após carregar -->
+  <script src="https://accounts.google.com/gsi/client" onload="initializeGSI()" async defer></script>
   <script src="https://apis.google.com/js/api.js"></script>
+  
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     body { 
@@ -216,15 +218,15 @@
             </div>
 
             <button type="submit" class="w-full theme-primary-btn active:scale-[0.99] font-semibold rounded-xl py-2.5 text-xs shadow-md transition flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-plus-circle"></i> Inserir Ponto
+              <i class="fa-solid fa-plus-circle"></i> Inserir Registro
             </button>
 
-            <!-- Botões de Falta e Atestado -->
+            <!-- Botões Adicionados: Marcar Falta e Atestado -->
             <div class="grid grid-cols-2 gap-2 pt-1">
-              <button type="button" onclick="marcarFaltaDia()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl py-2 text-xs shadow-md transition flex items-center justify-center gap-1.5">
+              <button type="button" onclick="marcarFaltaDia()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl py-2 text-xs shadow-md transition flex items-center justify-center gap-1.5" title="Marcar falta injustificada no dia">
                 <i class="fa-solid fa-user-xmark"></i> Marcar Falta
               </button>
-              <button type="button" onclick="marcarAtestadoDia()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl py-2 text-xs shadow-md transition flex items-center justify-center gap-1.5">
+              <button type="button" onclick="marcarAtestadoDia()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl py-2 text-xs shadow-md transition flex items-center justify-center gap-1.5" title="Inserir atestado médico sem gerar débito">
                 <i class="fa-solid fa-file-medical"></i> Atestado
               </button>
             </div>
@@ -262,14 +264,14 @@
                 <label class="block text-xs font-semibold opacity-80 mb-1.5 flex items-center gap-1.5">
                   <i class="fa-regular fa-calendar-plus theme-text"></i> Período - De
                 </label>
-                <input type="date" id="filterStart" onchange="renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                <input type="date" id="filterStart" onchange="autoSaveToDrive(); renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
               </div>
               <span class="opacity-50 font-bold self-center pt-5">até</span>
               <div>
                 <label class="block text-xs font-semibold opacity-80 mb-1.5 flex items-center gap-1.5">
                   <i class="fa-regular fa-calendar-check theme-text"></i> Até
                 </label>
-                <input type="date" id="filterEnd" onchange="renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                <input type="date" id="filterEnd" onchange="autoSaveToDrive(); renderTable()" class="theme-input border text-sm rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
               </div>
             </div>
 
@@ -353,7 +355,7 @@
     const CLIENT_ID = '413707131156-f35b9jrjhr9m04h6ss2r4l2e0ndcjnke.apps.googleusercontent.com';
     const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 
-    let tokenClient;
+    let tokenClient = null;
     let accessToken = null;
     let spreadsheetIdGlobal = null;
 
@@ -414,7 +416,7 @@
       updateUndoRedoButtons();
       autoSaveToDrive();
       renderTable();
-      showToast("Ação desfeita!");[cite: 1]
+      showToast("Ação desfeita!");
     }
 
     function redoAction() {
@@ -431,7 +433,7 @@
       updateUndoRedoButtons();
       autoSaveToDrive();
       renderTable();
-      showToast("Ação refeita!");[cite: 1]
+      showToast("Ação refeita!");
     }
 
     window.addEventListener('keydown', (e) => {
@@ -441,6 +443,34 @@
         e.preventDefault(); redoAction();
       }
     });
+
+    // Função vital para inicializar o Google GSI - Atrelada ao onload do Script
+    function initializeGSI() {
+      try {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: (response) => {
+            if (response.error !== undefined) {
+              showToast("Erro na autenticação do Google.", true);
+              return;
+            }
+            accessToken = response.access_token;
+            localStorage.setItem('google_access_token', accessToken);
+            onLoginSuccess();
+          },
+        });
+
+        // Verificando e restaurando sessão persistida ao iniciar a página
+        const savedToken = localStorage.getItem('google_access_token');
+        if (savedToken) {
+          accessToken = savedToken;
+          onLoginSuccess();
+        }
+      } catch (e) {
+        console.error("Falha ao preparar script do Google:", e);
+      }
+    }
 
     window.onload = function () {
       const today = new Date();
@@ -456,29 +486,31 @@
 
       applyThemeUI();
       applyShiftUI();
-
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (response) => {
-          if (response.error !== undefined) {
-            showToast("Erro ao autenticar com o Google.", true);[cite: 1]
-            return;
-          }
-          accessToken = response.access_token;
-          onLoginSuccess();
-        },
-      });
     };
 
     function handleAuthClick() {
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      try {
+        if (!tokenClient) {
+          if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+             initializeGSI();
+          } else {
+             showToast("O Google ainda está carregando ou o popup está bloqueado.", true);
+             return;
+          }
+        }
+        tokenClient.requestAccessToken({ prompt: '' });
+      } catch (err) {
+        console.error(err);
+        showToast("Erro ao abrir a janela de login. Libere pop-ups.", true);
+      }
     }
 
     function signOut() {
       accessToken = null;
       spreadsheetIdGlobal = null;
       timeRecords = {};
+      localStorage.removeItem('google_access_token');
+
       document.getElementById('authContainer').innerHTML = `
         <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-md flex items-center gap-2">
           <i class="fa-brands fa-google text-blue-500"></i> Entrar com Google
@@ -487,11 +519,11 @@
       document.getElementById('dbFileStatus').className = 'text-[11px] px-2 py-0.5 rounded-md font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5';
       document.getElementById('dbFileStatus').innerHTML = `<i class="fa-solid fa-circle text-[7px] text-rose-400"></i> Desconectado`;
       document.getElementById('mainContent').classList.add('hidden');
-      showToast("Você saiu da conta.");[cite: 1]
+      showToast("Você saiu da conta.");
     }
 
     async function onLoginSuccess() {
-      showToast("Login realizado com sucesso!");[cite: 1]
+      showToast("Sessão Google iniciada!");
       document.getElementById('authContainer').innerHTML = `
         <button onclick="signOut()" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2">
           <i class="fa-solid fa-right-from-bracket"></i> Sair
@@ -505,7 +537,7 @@
     }
 
     async function sincronizarAutomaticoDrive() {
-      showToast("Sincronizando com o Google Drive...");[cite: 1]
+      showToast("Sincronizando com o Google Drive...");
       try {
         const query = encodeURIComponent("name = 'BancoDePonto_MeuDrive' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false");
         const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
@@ -522,13 +554,20 @@
         const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:F200`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
-        const sheetData = await sheetRes.json();
         
+        if (sheetRes.status === 401) throw new Error("401 Unauthorized");
+
+        const sheetData = await sheetRes.json();
         processarDadosPlanilha(sheetData.values || []);
-        showToast("Sincronizado com sucesso!");[cite: 1]
+        showToast("Sincronizado com sucesso!");
       } catch (err) {
         console.error(err);
-        showToast("Erro ao sincronizar com o Drive.", true);[cite: 1]
+        if (err.message && err.message.includes('401')) {
+          signOut();
+          showToast("Acesso expirou. Faça login novamente.", true);
+        } else {
+          showToast("Erro ao sincronizar com o Drive.", true);
+        }
       }
     }
 
@@ -547,10 +586,17 @@
         body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'APONTAMENTOS' } } }] })
       });
 
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:F1?valueInputOption=RAW`, {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:F2?valueInputOption=RAW`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ range: 'APONTAMENTOS!A1:F1', majorDimension: 'ROWS', values: [["Data", "E1", "S1", "E2", "S2", "STATUS"]] })
+        body: JSON.stringify({
+          range: 'APONTAMENTOS!A1:F2',
+          majorDimension: 'ROWS',
+          values: [
+            ["CONFIG_TEMA", "CONFIG_ESCALA", "PERIODO_INICIO", "PERIODO_FIM", "", ""],
+            [currentThemeKey, currentShiftType, document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", ""]
+          ]
+        })
       });
 
       return spreadsheetId;
@@ -558,12 +604,32 @@
 
     function processarDadosPlanilha(linhas) {
       timeRecords = {};
-      if (!linhas || linhas.length <= 1) return;
+      if (!linhas || linhas.length === 0) return;
 
-      for (let i = 1; i < linhas.length; i++) {
+      const configRow = linhas[1];
+      if (configRow) {
+        if (configRow[0] && COLOR_THEMES[configRow[0]]) {
+          currentThemeKey = configRow[0];
+          applyThemeUI();
+        }
+        if (configRow[1] && SHIFT_CONFIGS[configRow[1]]) {
+          currentShiftType = configRow[1];
+          applyShiftUI();
+        }
+        if (configRow[2]) {
+          document.getElementById('filterStart').value = configRow[2];
+        }
+        if (configRow[3]) {
+          document.getElementById('filterEnd').value = configRow[3];
+        }
+      }
+
+      for (let i = 2; i < linhas.length; i++) {
         const row = linhas[i];
+        if (!row || row.length === 0) continue;
         const data = row[0];
-        if (!data) continue;
+        if (!data || !data.includes('-')) continue;
+
         timeRecords[data] = {
           e1: row[1] || '',
           s1: row[2] || '',
@@ -574,20 +640,28 @@
         };
       }
       renderTable();
+      updateNextPunchSuggestion();
     }
 
     function autoSaveToDrive() {
       const syncIndicator = document.getElementById('syncIndicator');
-      if (syncIndicator) syncIndicator.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Salvando...`;[cite: 1]
+      if (syncIndicator) syncIndicator.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Salvando...`;
 
       clearTimeout(autoSaveTimer);
       autoSaveTimer = setTimeout(async () => {
         if (!spreadsheetIdGlobal || !accessToken) return;
         try {
-          let rows = [["Data", "E1", "S1", "E2", "S2", "STATUS"]];
+          let rows = [
+            ["CONFIG_TEMA", "CONFIG_ESCALA", "PERIODO_INICIO", "PERIODO_FIM", "", ""],
+            [currentThemeKey, currentShiftType, document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", ""],
+            ["Data", "E1", "S1", "E2", "S2", "STATUS"]
+          ];
+
           Object.keys(timeRecords).sort().forEach(date => {
             const r = timeRecords[date];
-            rows.push([date, r.e1 || '', r.s1 || '', r.e2 || '', r.s2 || '', r.status || '']);
+            if (r.e1 || r.s1 || r.e2 || r.s2 || r.status) {
+              rows.push([date, r.e1 || '', r.s1 || '', r.e2 || '', r.s2 || '', r.status || '']);
+            }
           });
 
           await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:F500?valueInputOption=USER_ENTERED`, {
@@ -606,12 +680,36 @@
       }, 500);
     }
 
+    function updateNextPunchSuggestion() {
+      const dateVal = document.getElementById('punchDate').value;
+      if (!dateVal) return;
+
+      const rec = timeRecords[dateVal] || { e1: '', s1: '', e2: '', s2: '' };
+      let nextType = 'e1';
+
+      if (!rec.e1) {
+        nextType = 'e1';
+      } else if (!rec.s1) {
+        nextType = 's1';
+      } else if (!rec.e2) {
+        nextType = 'e2';
+      } else if (!rec.s2) {
+        nextType = 's2';
+      } else {
+        nextType = 's2';
+      }
+
+      const radio = document.querySelector(`input[name="punchType"][value="${nextType}"]`);
+      if (radio) radio.checked = true;
+    }
+
     function changeColorTheme(newTheme) {
       if (!COLOR_THEMES[newTheme]) return;
       pushHistoryState();
       currentThemeKey = newTheme;
       applyThemeUI();
-      showToast(`Tema alterado para: ${COLOR_THEMES[newTheme].name}`);[cite: 1]
+      autoSaveToDrive();
+      showToast(`Tema alterado para: ${COLOR_THEMES[newTheme].name}`);
     }
 
     function applyThemeUI() {
@@ -638,8 +736,9 @@
       pushHistoryState();
       currentShiftType = newShift;
       applyShiftUI();
+      autoSaveToDrive();
       renderTable();
-      showToast(`Escala alterada para: ${SHIFT_CONFIGS[newShift].name}`);[cite: 1]
+      showToast(`Escala alterada para: ${SHIFT_CONFIGS[newShift].name}`);
     }
 
     function applyShiftUI() {
@@ -669,7 +768,8 @@
     }
 
     function updateClock() {
-      document.getElementById('liveClock').textContent = new Date().toLocaleTimeString('pt-BR');
+      const now = new Date();
+      document.getElementById('liveClock').textContent = now.toLocaleTimeString('pt-BR');
     }
     setInterval(updateClock, 1000);
     updateClock();
@@ -714,7 +814,7 @@
         else timeRecords[isoDate].comments[field] = newComment.trim();
         autoSaveToDrive();
         renderTable();
-        showToast("Comentário salvo!");[cite: 1]
+        showToast("Comentário salvo!");
       }
     }
 
@@ -726,7 +826,8 @@
         if (timeRecords[isoDate].comments) delete timeRecords[isoDate].comments[field];
         autoSaveToDrive();
         renderTable();
-        showToast(`Registro ${field.toUpperCase()} excluído.`);[cite: 1]
+        updateNextPunchSuggestion();
+        showToast(`Registro ${field.toUpperCase()} excluído.`);
       }
     }
 
@@ -739,7 +840,8 @@
         timeRecords[isoDate][field] = newVal.trim();
         autoSaveToDrive();
         renderTable();
-        showToast("Registro atualizado!");[cite: 1]
+        updateNextPunchSuggestion();
+        showToast("Registro atualizado!");
       }
     }
 
@@ -747,17 +849,17 @@
       if (!timeRecords[isoDate] || !timeRecords[isoDate].status) return;
       if (confirm(`Deseja remover o status do dia ${isoDate}?`)) {
         pushHistoryState();
-        delete timeRecords[isoDate].status;
+        timeRecords[isoDate].status = '';
         autoSaveToDrive();
         renderTable();
-        showToast("Status removido.");[cite: 1]
+        showToast("Status removido.");
       }
     }
 
     function marcarFaltaDia() {
       const dateVal = document.getElementById('punchDate').value;
       if (!dateVal) {
-        showToast("Selecione uma data para marcar a falta.", true);[cite: 1]
+        showToast("Selecione uma data para marcar a falta.", true);
         return;
       }
       if (confirm(`Deseja marcar o dia ${dateVal} como FALTA INJUSTIFICADA? (Dedução integral da jornada)`)) {
@@ -767,14 +869,14 @@
         timeRecords[dateVal].e1 = ''; timeRecords[dateVal].s1 = ''; timeRecords[dateVal].e2 = ''; timeRecords[dateVal].s2 = '';
         autoSaveToDrive();
         renderTable();
-        showToast("Dia marcado como Falta.");[cite: 1]
+        showToast("Dia marcado como Falta.");
       }
     }
 
     function marcarAtestadoDia() {
       const dateVal = document.getElementById('punchDate').value;
       if (!dateVal) {
-        showToast("Selecione uma data para inserir o atestado.", true);[cite: 1]
+        showToast("Selecione uma data para inserir o atestado.", true);
         return;
       }
       if (confirm(`Deseja inserir ATESTADO MÉDICO no dia ${dateVal}? (Mantém os registros feitos e zera o débito restante)`)) {
@@ -783,7 +885,7 @@
         timeRecords[dateVal].status = 'ATESTADO';
         autoSaveToDrive();
         renderTable();
-        showToast("Atestado inserido com sucesso!");[cite: 1]
+        showToast("Atestado inserido com sucesso!");
       }
     }
 
@@ -846,6 +948,9 @@
         } else {
           extraMin = (isWeekend && currentShiftType === '8h') ? workedMin : (Math.abs(rawDiff) > 10 ? rawDiff : 0);
         }
+      } else if (!shift.allowsHalfDay && punchCount > 0) {
+        rawDiff = -standardWorkMin;
+        extraMin = status === 'ATESTADO' ? 0 : -standardWorkMin;
       }
 
       let isLate = e1 !== null && e1 > shift.lateThreshold;
@@ -983,8 +1088,9 @@
       timeRecords[dateVal][punchType] = timeVal;
       autoSaveToDrive();
       renderTable();
+      updateNextPunchSuggestion();
       fillCurrentTime();
-      showToast("Ponto registrado e salvo no Drive!");[cite: 1]
+      showToast("Ponto registrado e salvo no Drive!");
     }
 
     function exportToExcel() {
@@ -994,13 +1100,13 @@
 
       const startDate = parseISODate(startStr);
       const endDate = parseISODate(endStr);
-      const rows = [["DIA", "DATA", "E1", "S1", "E2", "S2", "HORAS TRABALHADAS", "HE / DÉBITO"]];
+      const rows = [["DIA", "DATA", "E1", "S1", "E2", "S2", "HORAS TRABALHADAS", "HE / DÉBITO", "STATUS"]];
 
       let curr = new Date(startDate);
       while (curr <= endDate) {
         const isoKey = formatDateISO(curr);
         const dayIdx = curr.getDay();
-        const rec = timeRecords[isoKey] || { e1: '', s1: '', e2: '', s2: '' };
+        const rec = timeRecords[isoKey] || { e1: '', s1: '', e2: '', s2: '', status: '' };
         const calc = calculateDay(rec, dayIdx === 0 || dayIdx === 6);
 
         rows.push([
@@ -1008,7 +1114,8 @@
           `${String(curr.getDate()).padStart(2, '0')}/${String(curr.getMonth() + 1).padStart(2, '0')}/${curr.getFullYear()}`,
           rec.e1 || '', rec.s1 || '', rec.e2 || '', rec.s2 || '',
           calc.workedMin !== null ? minutesToTimeString(calc.workedMin) : '',
-          minutesToTimeString(calc.extraMin, true)
+          minutesToTimeString(calc.extraMin, true),
+          calc.statusLabel || 'Normal'
         ]);
         curr.setDate(curr.getDate() + 1);
       }
@@ -1017,7 +1124,7 @@
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Controle de Ponto");
       XLSX.writeFile(wb, `Controle_Ponto_MeuDrive.xlsx`);
-      showToast("Planilha Excel exportada com sucesso!");[cite: 1]
+      showToast("Planilha Excel exportada com sucesso!");
     }
   </script>
 </body>
