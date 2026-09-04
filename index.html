@@ -216,7 +216,7 @@
             </div>
 
             <button type="submit" class="w-full theme-primary-btn active:scale-[0.99] font-semibold rounded-xl py-2.5 text-xs shadow-md transition flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-plus-circle"></i> Inserir Registro
+              <i class="fa-solid fa-plus-circle"></i> Inserir Ponto
             </button>
 
             <!-- Botões de Falta e Atestado -->
@@ -939,6 +939,7 @@
     }
 
     function renderTable() {
+      const shift = SHIFT_CONFIGS[currentShiftType] || SHIFT_CONFIGS['8h'];
       const startStr = document.getElementById('filterStart').value;
       const endStr = document.getElementById('filterEnd').value;
       if (!startStr || !endStr) return;
