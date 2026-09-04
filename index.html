@@ -8,11 +8,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  
-  <!-- GSI SDK modificado para inicializar imediatamente após carregar -->
-  <script src="https://accounts.google.com/gsi/client" onload="initializeGSI()" async defer></script>
+  <!-- Google Identity Services SDK -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js"></script>
-  
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     body { 
@@ -218,15 +216,15 @@
             </div>
 
             <button type="submit" class="w-full theme-primary-btn active:scale-[0.99] font-semibold rounded-xl py-2.5 text-xs shadow-md transition flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-plus-circle"></i> Inserir Registro
+              <i class="fa-solid fa-plus-circle"></i> Inserir Ponto
             </button>
 
-            <!-- Botões Adicionados: Marcar Falta e Atestado -->
+            <!-- Botões Adicionados: Falta e Atestado -->
             <div class="grid grid-cols-2 gap-2 pt-1">
-              <button type="button" onclick="marcarFaltaDia()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl py-2 text-xs shadow-md transition flex items-center justify-center gap-1.5" title="Marcar falta injustificada no dia">
+              <button type="button" onclick="marcarFaltaDia()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl py-2 text-xs shadow-md transition flex items-center justify-center gap-1.5" title="Marcar falta injustificada no dia (-8h ou -12h)">
                 <i class="fa-solid fa-user-xmark"></i> Marcar Falta
               </button>
-              <button type="button" onclick="marcarAtestadoDia()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl py-2 text-xs shadow-md transition flex items-center justify-center gap-1.5" title="Inserir atestado médico sem gerar débito">
+              <button type="button" onclick="marcarAtestadoDia()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl py-2 text-xs shadow-md transition flex items-center justify-center gap-1.5" title="Inserir atestado médico para não gerar débito">
                 <i class="fa-solid fa-file-medical"></i> Atestado
               </button>
             </div>
@@ -355,7 +353,7 @@
     const CLIENT_ID = '413707131156-f35b9jrjhr9m04h6ss2r4l2e0ndcjnke.apps.googleusercontent.com';
     const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 
-    let tokenClient = null;
+    let tokenClient;
     let accessToken = null;
     let spreadsheetIdGlobal = null;
 
@@ -444,34 +442,6 @@
       }
     });
 
-    // Função vital para inicializar o Google GSI - Atrelada ao onload do Script
-    function initializeGSI() {
-      try {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          callback: (response) => {
-            if (response.error !== undefined) {
-              showToast("Erro na autenticação do Google.", true);
-              return;
-            }
-            accessToken = response.access_token;
-            localStorage.setItem('google_access_token', accessToken);
-            onLoginSuccess();
-          },
-        });
-
-        // Verificando e restaurando sessão persistida ao iniciar a página
-        const savedToken = localStorage.getItem('google_access_token');
-        if (savedToken) {
-          accessToken = savedToken;
-          onLoginSuccess();
-        }
-      } catch (e) {
-        console.error("Falha ao preparar script do Google:", e);
-      }
-    }
-
     window.onload = function () {
       const today = new Date();
       document.getElementById('punchDate').value = formatDateISO(today);
@@ -486,31 +456,29 @@
 
       applyThemeUI();
       applyShiftUI();
+
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (response) => {
+          if (response.error !== undefined) {
+            showToast("Erro ao autenticar com o Google.", true);
+            return;
+          }
+          accessToken = response.access_token;
+          onLoginSuccess();
+        },
+      });
     };
 
     function handleAuthClick() {
-      try {
-        if (!tokenClient) {
-          if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
-             initializeGSI();
-          } else {
-             showToast("O Google ainda está carregando ou o popup está bloqueado.", true);
-             return;
-          }
-        }
-        tokenClient.requestAccessToken({ prompt: '' });
-      } catch (err) {
-        console.error(err);
-        showToast("Erro ao abrir a janela de login. Libere pop-ups.", true);
-      }
+      tokenClient.requestAccessToken({ prompt: 'consent' });
     }
 
     function signOut() {
       accessToken = null;
       spreadsheetIdGlobal = null;
       timeRecords = {};
-      localStorage.removeItem('google_access_token');
-
       document.getElementById('authContainer').innerHTML = `
         <button onclick="handleAuthClick()" class="bg-white hover:bg-slate-100 text-slate-900 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-md flex items-center gap-2">
           <i class="fa-brands fa-google text-blue-500"></i> Entrar com Google
@@ -523,7 +491,7 @@
     }
 
     async function onLoginSuccess() {
-      showToast("Sessão Google iniciada!");
+      showToast("Login realizado com sucesso!");
       document.getElementById('authContainer').innerHTML = `
         <button onclick="signOut()" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2">
           <i class="fa-solid fa-right-from-bracket"></i> Sair
@@ -551,23 +519,16 @@
           spreadsheetIdGlobal = await criarPlanilhaNoDrive();
         }
 
-        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:F200`, {
+        const sheetRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:G1000`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
-        
-        if (sheetRes.status === 401) throw new Error("401 Unauthorized");
-
         const sheetData = await sheetRes.json();
+        
         processarDadosPlanilha(sheetData.values || []);
         showToast("Sincronizado com sucesso!");
       } catch (err) {
         console.error(err);
-        if (err.message && err.message.includes('401')) {
-          signOut();
-          showToast("Acesso expirou. Faça login novamente.", true);
-        } else {
-          showToast("Erro ao sincronizar com o Drive.", true);
-        }
+        showToast("Erro ao sincronizar com o Drive.", true);
       }
     }
 
@@ -586,15 +547,16 @@
         body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'APONTAMENTOS' } } }] })
       });
 
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:F2?valueInputOption=RAW`, {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/APONTAMENTOS!A1:G3?valueInputOption=RAW`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          range: 'APONTAMENTOS!A1:F2',
+          range: 'APONTAMENTOS!A1:G3',
           majorDimension: 'ROWS',
           values: [
-            ["CONFIG_TEMA", "CONFIG_ESCALA", "PERIODO_INICIO", "PERIODO_FIM", "", ""],
-            [currentThemeKey, currentShiftType, document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", ""]
+            ["CONFIG_TEMA", "CONFIG_ESCALA", "PERIODO_INICIO", "PERIODO_FIM", "", "", ""],
+            [currentThemeKey, currentShiftType, document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", "", ""],
+            ["Data", "E1", "S1", "E2", "S2", "STATUS", "COMENTARIOS"]
           ]
         })
       });
@@ -606,8 +568,8 @@
       timeRecords = {};
       if (!linhas || linhas.length === 0) return;
 
-      const configRow = linhas[1];
-      if (configRow) {
+      if (linhas[0] && linhas[0][0] === "CONFIG_TEMA" && linhas[1]) {
+        const configRow = linhas[1];
         if (configRow[0] && COLOR_THEMES[configRow[0]]) {
           currentThemeKey = configRow[0];
           applyThemeUI();
@@ -624,11 +586,19 @@
         }
       }
 
-      for (let i = 2; i < linhas.length; i++) {
+      for (let i = 0; i < linhas.length; i++) {
         const row = linhas[i];
         if (!row || row.length === 0) continue;
         const data = row[0];
-        if (!data || !data.includes('-')) continue;
+        
+        if (!data || data === 'CONFIG_TEMA' || data === 'Data' || !data.includes('-')) continue;
+
+        let parsedComments = {};
+        if (row[6]) {
+          try {
+            parsedComments = JSON.parse(row[6]);
+          } catch(e) {}
+        }
 
         timeRecords[data] = {
           e1: row[1] || '',
@@ -636,7 +606,7 @@
           e2: row[3] || '',
           s2: row[4] || '',
           status: row[5] || '',
-          comments: {}
+          comments: parsedComments
         };
       }
       renderTable();
@@ -652,22 +622,22 @@
         if (!spreadsheetIdGlobal || !accessToken) return;
         try {
           let rows = [
-            ["CONFIG_TEMA", "CONFIG_ESCALA", "PERIODO_INICIO", "PERIODO_FIM", "", ""],
-            [currentThemeKey, currentShiftType, document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", ""],
-            ["Data", "E1", "S1", "E2", "S2", "STATUS"]
+            ["CONFIG_TEMA", "CONFIG_ESCALA", "PERIODO_INICIO", "PERIODO_FIM", "", "", ""],
+            [currentThemeKey, currentShiftType, document.getElementById('filterStart').value, document.getElementById('filterEnd').value, "", "", ""],
+            ["Data", "E1", "S1", "E2", "S2", "STATUS", "COMENTARIOS"]
           ];
 
           Object.keys(timeRecords).sort().forEach(date => {
             const r = timeRecords[date];
-            if (r.e1 || r.s1 || r.e2 || r.s2 || r.status) {
-              rows.push([date, r.e1 || '', r.s1 || '', r.e2 || '', r.s2 || '', r.status || '']);
+            if (r.e1 || r.s1 || r.e2 || r.s2 || r.status || (r.comments && Object.keys(r.comments).length > 0)) {
+              rows.push([date, r.e1 || '', r.s1 || '', r.e2 || '', r.s2 || '', r.status || '', JSON.stringify(r.comments || {})]);
             }
           });
 
-          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:F500?valueInputOption=USER_ENTERED`, {
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetIdGlobal}/values/APONTAMENTOS!A1:G1000?valueInputOption=USER_ENTERED`, {
             method: 'PUT',
             headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ range: 'APONTAMENTOS!A1:F500', majorDimension: 'ROWS', values: rows })
+            body: JSON.stringify({ range: 'APONTAMENTOS!A1:G1000', majorDimension: 'ROWS', values: rows })
           });
 
           if (syncIndicator) {
@@ -847,9 +817,9 @@
 
     function clearDayStatus(isoDate) {
       if (!timeRecords[isoDate] || !timeRecords[isoDate].status) return;
-      if (confirm(`Deseja remover o status do dia ${isoDate}?`)) {
+      if (confirm(`Deseja remover o status de ${timeRecords[isoDate].status} do dia ${isoDate}?`)) {
         pushHistoryState();
-        timeRecords[isoDate].status = '';
+        delete timeRecords[isoDate].status;
         autoSaveToDrive();
         renderTable();
         showToast("Status removido.");
@@ -879,7 +849,7 @@
         showToast("Selecione uma data para inserir o atestado.", true);
         return;
       }
-      if (confirm(`Deseja inserir ATESTADO MÉDICO no dia ${dateVal}? (Mantém os registros feitos e zera o débito restante)`)) {
+      if (confirm(`Deseja inserir ATESTADO MÉDICO/JUSTIFICATIVA no dia ${dateVal}? (O tempo restante não gerará débito)`)) {
         pushHistoryState();
         if (!timeRecords[dateVal]) timeRecords[dateVal] = { e1: '', s1: '', e2: '', s2: '', comments: {} };
         timeRecords[dateVal].status = 'ATESTADO';
@@ -1007,9 +977,9 @@
 
         let alertsHtml = '';
         if (calc.statusLabel === 'FALTA') {
-          alertsHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-rose-600 text-white font-bold shadow-sm"><i class="fa-solid fa-user-xmark"></i> FALTA <button type="button" onclick="clearDayStatus('${isoKey}')" class="ml-1 text-white hover:text-rose-200" title="Remover falta"><i class="fa-solid fa-trash-can text-[10px]"></i></button></span> `;
+          alertsHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-rose-600 text-white font-bold shadow-sm"><i class="fa-solid fa-user-xmark"></i> FALTA <button type="button" onclick="clearDayStatus('${isoKey}')" class="ml-1.5 opacity-60 hover:opacity-100 transition" title="Remover falta"><i class="fa-solid fa-trash-can text-[10px]"></i></button></span> `;
         } else if (calc.statusLabel === 'ATESTADO') {
-          alertsHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-purple-600 text-white font-bold shadow-sm"><i class="fa-solid fa-file-medical"></i> ATESTADO <button type="button" onclick="clearDayStatus('${isoKey}')" class="ml-1 text-white hover:text-purple-200" title="Remover atestado"><i class="fa-solid fa-trash-can text-[10px]"></i></button></span> `;
+          alertsHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-purple-600 text-white font-bold shadow-sm"><i class="fa-solid fa-file-medical"></i> ATESTADO <button type="button" onclick="clearDayStatus('${isoKey}')" class="ml-1.5 opacity-60 hover:opacity-100 transition" title="Remover atestado"><i class="fa-solid fa-trash-can text-[10px]"></i></button></span> `;
         }
 
         if (calc.missingS2 && calc.suggestedS2 !== null) {
@@ -1094,6 +1064,7 @@
     }
 
     function exportToExcel() {
+      const shift = SHIFT_CONFIGS[currentShiftType] || SHIFT_CONFIGS['8h'];
       const startStr = document.getElementById('filterStart').value;
       const endStr = document.getElementById('filterEnd').value;
       if (!startStr || !endStr) return;
