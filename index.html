@@ -219,7 +219,7 @@
               <i class="fa-solid fa-plus-circle"></i> Inserir Ponto
             </button>
 
-            <!-- Botões Adicionados: Marcar Falta e Atestado -->
+            <!-- Botões de Falta e Atestado -->
             <div class="grid grid-cols-2 gap-2 pt-1">
               <button type="button" onclick="marcarFaltaDia()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl py-2 text-xs shadow-md transition flex items-center justify-center gap-1.5">
                 <i class="fa-solid fa-user-xmark"></i> Marcar Falta
@@ -777,7 +777,7 @@
         showToast("Selecione uma data para inserir o atestado.", true);[cite: 1]
         return;
       }
-      if (confirm(`Deseja inserir ATESTADO MÉDICO/JUSTIFICATIVA no dia ${dateVal}? (O tempo restante não gerará débito, mantendo os registros já feitos)`)) {
+      if (confirm(`Deseja inserir ATESTADO MÉDICO no dia ${dateVal}? (Mantém os registros feitos e zera o débito restante)`)) {
         pushHistoryState();
         if (!timeRecords[dateVal]) timeRecords[dateVal] = { e1: '', s1: '', e2: '', s2: '', comments: {} };
         timeRecords[dateVal].status = 'ATESTADO';
@@ -794,13 +794,11 @@
       const punchCount = punches.length;
 
       if (status === 'FALTA') {
-        const penalty = (currentShiftType === '8h') ? -480 : -720; // -8h ou -12h
+        const penalty = (currentShiftType === '8h') ? -480 : -720;
         return { workedMin: 0, extraMin: penalty, isLate: false, missingS2: false, suggestedS2: null, hasValidPairs: false, isHalfDay: false, underTargetHours: true, hasOddPunches: false, statusLabel: 'FALTA' };
       }
 
-      if (punchCount === 0) {
-        return { workedMin: null, extraMin: 0, isLate: false, missingS2: false, suggestedS2: null, hasValidPairs: false, isHalfDay: false, underTargetHours: false, statusLabel: status === 'ATESTADO' ? 'ATESTADO' : null };
-      }
+      if (punchCount === 0) return { workedMin: null, extraMin: 0, isLate: false, missingS2: false, suggestedS2: null, hasValidPairs: false, isHalfDay: false, underTargetHours: false, statusLabel: status === 'ATESTADO' ? 'ATESTADO' : null };
 
       const e1 = timeToMinutes(rec?.e1);
       const s1 = timeToMinutes(rec?.s1);
@@ -844,14 +842,10 @@
       if (workedMin !== null) {
         rawDiff = workedMin - standardWorkMin;
         if (status === 'ATESTADO') {
-          // Com atestado, se trabalhou menos que a meta, não acumula débito (extraMin fica apenas com saldo positivo se houver)
           extraMin = rawDiff > 10 ? rawDiff : 0;
         } else {
           extraMin = (isWeekend && currentShiftType === '8h') ? workedMin : (Math.abs(rawDiff) > 10 ? rawDiff : 0);
         }
-      } else if (!shift.allowsHalfDay && punchCount > 0) {
-        rawDiff = -standardWorkMin;
-        extraMin = status === 'ATESTADO' ? 0 : -standardWorkMin;
       }
 
       let isLate = e1 !== null && e1 > shift.lateThreshold;
@@ -908,9 +902,9 @@
 
         let alertsHtml = '';
         if (calc.statusLabel === 'FALTA') {
-          alertsHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-rose-600 text-white font-bold shadow-sm"><i class="fa-solid fa-user-xmark"></i> FALTA <button type="button" onclick="clearDayStatus('${isoKey}')" class="ml-1 text-white hover:text-rose-200" title="Excluir Falta"><i class="fa-solid fa-trash-can text-[10px]"></i></button></span> `;
+          alertsHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-rose-600 text-white font-bold shadow-sm"><i class="fa-solid fa-user-xmark"></i> FALTA <button type="button" onclick="clearDayStatus('${isoKey}')" class="ml-1 text-white hover:text-rose-200" title="Remover falta"><i class="fa-solid fa-trash-can text-[10px]"></i></button></span> `;
         } else if (calc.statusLabel === 'ATESTADO') {
-          alertsHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-purple-600 text-white font-bold shadow-sm"><i class="fa-solid fa-file-medical"></i> ATESTADO <button type="button" onclick="clearDayStatus('${isoKey}')" class="ml-1 text-white hover:text-purple-200" title="Excluir Atestado"><i class="fa-solid fa-trash-can text-[10px]"></i></button></span> `;
+          alertsHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-purple-600 text-white font-bold shadow-sm"><i class="fa-solid fa-file-medical"></i> ATESTADO <button type="button" onclick="clearDayStatus('${isoKey}')" class="ml-1 text-white hover:text-purple-200" title="Remover atestado"><i class="fa-solid fa-trash-can text-[10px]"></i></button></span> `;
         }
 
         if (calc.missingS2 && calc.suggestedS2 !== null) {
@@ -993,39 +987,6 @@
       showToast("Ponto registrado e salvo no Drive!");[cite: 1]
     }
 
-    function marcarFaltaDia() {
-      const dateVal = document.getElementById('punchDate').value;
-      if (!dateVal) {
-        showToast("Selecione uma data para marcar a falta.", true);[cite: 1]
-        return;
-      }
-      if (confirm(`Deseja marcar o dia ${dateVal} como FALTA INJUSTIFICADA? (Dedução integral da jornada)`)) {
-        pushHistoryState();
-        if (!timeRecords[dateVal]) timeRecords[dateVal] = { e1: '', s1: '', e2: '', s2: '', comments: {} };
-        timeRecords[dateVal].status = 'FALTA';
-        timeRecords[dateVal].e1 = ''; timeRecords[dateVal].s1 = ''; timeRecords[dateVal].e2 = ''; timeRecords[dateVal].s2 = '';
-        autoSaveToDrive();
-        renderTable();
-        showToast("Dia marcado como Falta.");[cite: 1]
-      }
-    }
-
-    function marcarAtestadoDia() {
-      const dateVal = document.getElementById('punchDate').value;
-      if (!dateVal) {
-        showToast("Selecione uma data para inserir o atestado.", true);[cite: 1]
-        return;
-      }
-      if (confirm(`Deseja inserir ATESTADO MÉDICO no dia ${dateVal}? (Mantém os registros feitos e zera o débito restante)`)) {
-        pushHistoryState();
-        if (!timeRecords[dateVal]) timeRecords[dateVal] = { e1: '', s1: '', e2: '', s2: '', comments: {} };
-        timeRecords[dateVal].status = 'ATESTADO';
-        autoSaveToDrive();
-        renderTable();
-        showToast("Atestado inserido com sucesso!");[cite: 1]
-      }
-    }
-
     function exportToExcel() {
       const startStr = document.getElementById('filterStart').value;
       const endStr = document.getElementById('filterEnd').value;
@@ -1033,13 +994,13 @@
 
       const startDate = parseISODate(startStr);
       const endDate = parseISODate(endStr);
-      const rows = [["DIA", "DATA", "E1", "S1", "E2", "S2", "HORAS TRABALHADAS", "HE / DÉBITO", "STATUS"]];
+      const rows = [["DIA", "DATA", "E1", "S1", "E2", "S2", "HORAS TRABALHADAS", "HE / DÉBITO"]];
 
       let curr = new Date(startDate);
       while (curr <= endDate) {
         const isoKey = formatDateISO(curr);
         const dayIdx = curr.getDay();
-        const rec = timeRecords[isoKey] || { e1: '', s1: '', e2: '', s2: '', status: '' };
+        const rec = timeRecords[isoKey] || { e1: '', s1: '', e2: '', s2: '' };
         const calc = calculateDay(rec, dayIdx === 0 || dayIdx === 6);
 
         rows.push([
@@ -1047,8 +1008,7 @@
           `${String(curr.getDate()).padStart(2, '0')}/${String(curr.getMonth() + 1).padStart(2, '0')}/${curr.getFullYear()}`,
           rec.e1 || '', rec.s1 || '', rec.e2 || '', rec.s2 || '',
           calc.workedMin !== null ? minutesToTimeString(calc.workedMin) : '',
-          minutesToTimeString(calc.extraMin, true),
-          calc.statusLabel || 'Normal'
+          minutesToTimeString(calc.extraMin, true)
         ]);
         curr.setDate(curr.getDate() + 1);
       }
