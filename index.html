@@ -866,8 +866,9 @@
       const punchCount = punches.length;
 
       if (status === 'FALTA') {
-        const penalty = (currentShiftType === '8h') ? -480 : -720;
-        return { workedMin: 0, extraMin: penalty, isLate: false, missingS2: false, suggestedS2: null, hasValidPairs: false, isHalfDay: false, underTargetHours: true, hasOddPunches: false, statusLabel: 'FALTA' };
+        // Na escala de 8h, sábado e domingo não possuem jornada prevista nem débito.
+        const penalty = (isWeekend && currentShiftType === '8h') ? 0 : ((currentShiftType === '8h') ? -480 : -720);
+        return { workedMin: 0, extraMin: penalty, isLate: false, missingS2: false, suggestedS2: null, hasValidPairs: false, isHalfDay: false, underTargetHours: penalty < 0, hasOddPunches: false, statusLabel: 'FALTA' };
       }
 
       if (punchCount === 0) return { workedMin: null, extraMin: 0, isLate: false, missingS2: false, suggestedS2: null, hasValidPairs: false, isHalfDay: false, underTargetHours: false, statusLabel: status === 'ATESTADO' ? 'ATESTADO' : null };
@@ -914,8 +915,10 @@
       if (workedMin !== null) {
         rawDiff = workedMin - standardWorkMin;
         if (status === 'ATESTADO') {
-          extraMin = rawDiff > 10 ? rawDiff : 0;
+          // Em finais de semana da escala 8h, todo o tempo trabalhado é HE, mesmo com atestado.
+          extraMin = (isWeekend && currentShiftType === '8h') ? workedMin : (rawDiff > 10 ? rawDiff : 0);
         } else {
+          // Sábado e domingo: todo o tempo efetivamente trabalhado é hora extra desde o primeiro minuto.
           extraMin = (isWeekend && currentShiftType === '8h') ? workedMin : (Math.abs(rawDiff) > 10 ? rawDiff : 0);
         }
       } else if (!shift.allowsHalfDay && punchCount > 0) {
